@@ -1,0 +1,46 @@
+import h5py as h5
+import numpy as np
+from .config import DGA_Config
+
+class DMFT_Reader:
+    """
+    class to read dmft data from hdf5 file
+    """
+    def __init__(self, config: DGA_Config):
+        self.config = config
+        #self.dmft_dict: dict = {}
+        self._load_dmft_data()
+
+    def _load_dmft_data(self) -> None:
+        with h5.File(self.config.hdf5_file, 'r') as f:
+            # read general info
+            self.config.dmft_dict['beta'] = f['.config'].attrs['general.beta']
+            self.config.dmft_dict['U'] = f['.config'].attrs['atoms.1.udd']
+            self.config.dmft_dict['mu'] = f['.config'].attrs['general.mu']
+
+            # read frequency infos
+            niwf = f['.axes/iw'][()].shape[0]//2
+            n4iwf = f['.axes/iwf-g4'][()].shape[0]//2
+            n4iwb = f['.axes/iwb-g4'][()].shape[0]//2
+            self.config.niwf = niwf
+            self.config.n4iwf = n4iwf
+            self.config.n4iwb = n4iwb
+
+            # read Green's function
+            giw = f['stat-last/ineq-001/giw/value'][0,0,:] * 0.5
+            giw += f['stat-last/ineq-001/giw/value'][0,1,:] * 0.5
+            self.config.dmft_dict['giw'] = giw
+
+            # read Selfenergy
+            siw = f['stat-last/ineq-001/siw/value'][0,0,:] * 0.5
+            siw += f['stat-last/ineq-001/siw/value'][0,1,:] * 0.5
+            self.config.dmft_dict['siw'] = siw
+
+            # read 2p-GF
+            g4iw = f['stat-last/ineq-001/g4iw/value'][()]
+            g4iw_uu = 0.5*(g4iw[0,0,0,0,...] + g4iw[0,1,0,1,...])
+            g4iw_ud = 0.5*(g4iw[0,0,0,1,...] + g4iw[0,1,0,0,...])
+            g4iw_sym = np.empty([2,*g4iw_uu.shape], dtype=complex)
+            g4iw_sym[0,...] = g4iw_uu
+            g4iw_sym[1,...] = g4iw_ud
+            self.config.dmft_dict['g4iw'] = g4iw_sym

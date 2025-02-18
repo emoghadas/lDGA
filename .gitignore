@@ -68,3 +68,7 @@ coverage.xml
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# emacs temporary files
+*~
+

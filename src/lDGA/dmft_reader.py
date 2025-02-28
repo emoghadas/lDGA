@@ -43,4 +43,13 @@ class DMFT_Reader:
             g4iw_sym = np.empty([2,*g4iw_uu.shape], dtype=complex)
             g4iw_sym[0,...] = g4iw_uu
             g4iw_sym[1,...] = g4iw_ud
-            self.config.dmft_dict['g4iw'] = g4iw_sym
+            
+            # trim g according to n4iwf
+            nu_range = slice(niwf-n4iwf, niwf+n4iwf)
+            g_tr = giw[nu_range]
+
+            # construct local chi
+            gg_straight = np.tensordot(g_tr,g_tr,((),()))
+            g4iw_sym[...,n4iwb] = g4iw_sym[...,n4iwb] - gg_straight.reshape(1,*gg_straight.shape) # delta(w,0)
+            chi_ph = g4iw_sym * self.config.dmft_dict['beta']
+            self.config.dmft_dict['chi_ph'] = chi_ph

@@ -2,15 +2,15 @@ import numpy as np
 from utilities import ik2k, k2ik
 
 #Without Hartree, should we insert it?
-def Hubbard_SDE(U:np.float64, beta:np.float64, gamma:np.ndarray, Chi_r_w_q:np.ndarray, F_r_loc:np.array, Chi_0gen:np.array, Self_old:np.array, dens:np.float64, dim:int=2 ):
+def Hubbard_SDE(U:np.float64, beta:np.float64, gamma:np.ndarray, Chi_d_w_q:np.ndarray, Chi_m_w_q:np.ndarray, F_d_loc:np.ndarray, F_m_loc:np.ndarray, Chi_0gen:np.array, Self_old:np.array, dens:np.float64, dim:int=2):
     #assert shapes
     Nnu,Nk = Self_old.shape
-    Nw,Nq = Chi_r_w_q.shape[1:]
+    Nw,Nq = Chi_d_w_q.shape
     Self_Energy = np.zeros( Self_old.shape, dtype=np.complex128)
-    F_updn = F_r_loc[1] - F_r_loc[0] #order should be ["density","magnetic"]
+    F_updn = F_d_loc - F_m_loc #order should be ["density","magnetic"]
     theta_nu_w_q = np.sum( \
-                           np.reshape(F_updn,newshape(Nnu,Nnu,Nw,1)) * \
-                           np.reshape( np.diag(Chi_0gen,axis1=0,axis2=1),newshape(1,Nnu,Nw,Nq)), \
+                           np.reshape(F_updn, newshape=(Nnu,Nnu,Nw,1)) * \
+                           np.reshape( np.diag(Chi_0gen,axis1=0,axis2=1), newshape=(1,Nnu,Nw,Nq)), \
                            axis=1)
     thetha_nu_w_q += 2 + gamma[0]*( 1.0+U*np.reshape(Chi_r_w_q[0],newshape=(1,Nw,Nq)) ) \
         +3.0*gamma[1]*(-1.0+U*np.reshape(Chi_r_w_q[1],newshape=(1,Nw,Nq)))

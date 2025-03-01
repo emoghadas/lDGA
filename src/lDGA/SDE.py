@@ -1,79 +1,74 @@
 import numpy as np
-from utilities import ik2k, k2ik
+from lDGA.utilities import ik2k, k2ik
+from numba import jit
 
 #Without Hartree, should we insert it?
-def Hubbard_SDE(U:np.float64, beta:np.float64, gamma:np.ndarray, Chi_d_w_q:np.ndarray, Chi_m_w_q:np.ndarray, F_d_loc:np.ndarray, F_m_loc:np.ndarray, Chi_0gen:np.array, Self_old:np.array, dens:np.float64, dim:int=2):
+def Hubbard_SDE(U:np.float64, beta:np.float64, gamma_d:np.ndarray, gamma_m:np.ndarray, chi_d_w_q:np.ndarray, chi_m_w_q:np.ndarray, F_d_loc:np.array, F_m_loc:np.array, chi_0_nu_w_q:np.ndarray, self_old:np.ndarray, dens:np.float64, Nk:int, dim:int=2):
     #assert shapes
-    Nnu,Nk = Self_old.shape
-    Nw,Nq = Chi_d_w_q.shape
-    Self_Energy = np.zeros( Self_old.shape, dtype=np.complex128)
-    F_updn = F_d_loc - F_m_loc #order should be ["density","magnetic"]
-    theta_nu_w_q = np.sum( \
-                           np.reshape(F_updn, newshape=(Nnu,Nnu,Nw,1)) * \
-                           np.reshape( np.diag(Chi_0gen,axis1=0,axis2=1), newshape=(1,Nnu,Nw,Nq)), \
-                           axis=1)
-    thetha_nu_w_q += 2 + gamma[0]*( 1.0+U*np.reshape(Chi_r_w_q[0],newshape=(1,Nw,Nq)) ) \
-        +3.0*gamma[1]*(-1.0+U*np.reshape(Chi_r_w_q[1],newshape=(1,Nw,Nq)))
+    Nnu = self_old.shape[0]
+    Nw,Nq = chi_d_w_q.shape
+    Nw=(Nw+1)/2; Nnu/=2;
+    self_energy = np.zeros( (2*Nnu,Nk), dtype=np.complex128)
+    F_updn = F_d_loc - F_m_loc
 
-    G_aux = np.zeros( (Nw,Nq), dtype=np.complex128)
-    for inu in range(-Nnu/2,Nnu/2):
-        for ik in range(Nk):
-            k = k2ik(ik,dim,Nk)
-            Self_Energy[inu,ik] = -0.5*U*(1/beta**2)*np.sum( thehta_nu_w_q[inu,:,:] * G_wq_given_nuk(nu,k,Self_old,Nw,Nq,beta)  )
-            
-
+    theta_nu_w_q = np.zeros( (2*Nnu,2*Nw-1,Nq), dtype=np.complex128)
+    theta_nu_w_q = -2.0*np.einsum('ijk,jkm->ikm', F_updn, chi0_nu_w_q)
+    thetha_nu_w_q += 2.0 + gamma_d + np.einsum('ijk,ijk,jk',gamma_d, Uw, chi_d_w_q) \
+                         -3.0*gamma_m +3.0*np.einsum('ijk,ijk,jk',gamma_m, Uw, chi_m_w_q)
+    self_energy = self_sum_U(theta_nu_w_q, U, beta, Nk, dim)
     #Hartree term
-    Self_Energy[:,:] += 0.5*U*dens
-    return something
+    self_energy[:,:] += dens*U
 
+    return self_energy
 
-def Holstein_SDE(g:np.float64, omega0:np.float64, beta:np.float64, gamma:np.ndarray, Chi_r_w_q:np.ndarray, F_r_loc:np.array, Chi_0gen:np.array, Self_old:np.array, dens:np.float64, dim:int=2):
-    #assert shapes
-    Nnu,Nk = Self_old.shape
-    Nw,Nq = Chi_r_w_q.shape[1:]
-    Self_Energy = np.zeros( Self_old.shape, dtype=np.complex128)
-    F_d = -F_r_loc[0] #order should be ["density","magnetic"]
-    wmats = 2*np.pi/beta*np.linspace(0,Nw,Nw,endpoint=False)
-    Uw = np.reshape(Udyn_arr(omegas=wmats, omega0=omega0, g=g),newshape=(1,Nw,1))
-    theta_nu_w_q = 2.0*np.sum( \
-                           np.reshape(F_d,newshape(Nnu,Nnu,Nw,1)) * \
-                           np.reshape( np.diag(Chi_0gen,axis1=0,axis2=1),newshape(1,Nnu,Nw,Nq)), \
-                           axis=1)
-    thetha_nu_w_q += 2.0 + gamma[0]*( 1.0+Uw*np.reshape(Chi_r_w_q[0],newshape=(1,Nw,Nq)) ) \
-        +3.0*gamma[1]*(-1.0+Uw*np.reshape(Chi_r_w_q[1],newshape=(1,Nw,Nq)))
+# Swinger-Dyson for the Hubbard-Holstein model
+def Hubbard_Holstein_SDE(U:np.float64, g:np.float64, omega0:np.float64, beta:np.float64, gamma_d:np.ndarray, gamma_m:np.ndarray, chi_d_w_q:np.ndarray, chi_m_w_q:np.ndarray, F_d_loc:np.array, F_m_loc:np.array, chi_0_nu_w_q:np.ndarray, self_old:np.ndarray, dens:np.float64, Nk:int, dim:int=2):
+    Nnu = self_old.shape[0]
+    Nw,Nq = chi_d_w_q.shape
+    Nw=(Nw+1)/2; Nnu/=2;
+    self_energy = np.zeros( (2*Nnu,Nk), dtype=np.complex128)
+    wmats = 2*np.pi/beta*np.linspace(-Nw,Nw,2*Nw-1,endpoint=True)
+    #Uw = np.reshape(Udyn_arr(omegas=wmats, omega0=omega0, g=g, U=0.0),newshape=(1,2*Nw,1))
+    Uw = Udyn_arr(omegas=wmats, omega0=omega0, g=g, U=0.0)
 
-    G_aux = np.zeros( (Nw,Nq), dtype=np.complex128)
-    for inu in range(-Nnu/2,Nnu/2):
-        for ik in range(Nk):
-            k = k2ik(ik,dim,Nk)
-            Self_Energy[inu,ik] = -0.5*(1/beta**2)*np.sum( Uw[0,:,:]*thehta_nu_w_q[inu,:,:] * G_wq_given_nuk(nu,k,Self_old,Nw,Nq,beta)  )
+    theta_nu_w_q = np.zeros( (2*Nnu,2*Nw-1,Nq), dtype=np.complex128)
+    theta_nu_w_q = 2.0*np.einsum('ijk,jkm->ikm', F_d_loc, chi0_nu_w_q)
+    thetha_nu_w_q += 2.0 + gamma_d + np.einsum('ijk,ijk,jk',gamma_d, Uw, chi_d_w_q) \
+                         -3.0*gamma_m +3.0*np.einsum('ijk,ijk,jk',gamma_m, Uw, chi_m_w_q)
+   #thetha_nu_w_q += 2.0 + gamma_d*( 1.0+(Uw+U)*np.reshape(chi_d_w_q,newshape=(1,Nw,Nq)) ) \
+#                      +3.0*gamma_m*(-1.0+(Uw+U)*np.reshape(chi_m_w_q[1],newshape=(1,Nw,Nq)))
 
+   #Here we also sum Fock term
+    self_energy = self_sum_Uw(theta_nu_w_q, Uw, U, beta, Nk, dim)
     #Hartree term
-    Self_Energy[:,:] += -2.0*(g**2/omega0)*dens
-    return something
+    self_energy[:,:] += dens*( U-2.0*(g**2/omega0) )
 
-def Hubbard_Holstein_SDE(U:np.float64, g:np.float64, omega0:np.float64, beta:np.float64, gamma:np.ndarray, Chi_r_w_q:np.ndarray, F_r_loc:np.array, Chi_0gen:np.array, Self_old:np.array, dens:np.float64, dim:int=2):
-    #assert shapes
-    Nnu,Nk = Self_old.shape
-    Nw,Nq = Chi_r_w_q.shape[1:]
-    Self_Energy = np.zeros( Self_old.shape, dtype=np.complex128)
-    F_d = -F_r_loc[0] #order should be ["density","magnetic"]
-    wmats = 2*np.pi/beta*np.linspace(0,Nw,Nw,endpoint=False)
-    Uw = np.reshape(Udyn_arr(omegas=wmats, omega0=omega0, g=g, U=U),newshape=(1,Nw,1))
-    theta_nu_w_q = 2.0*np.sum( \
-                           np.reshape(F_d,newshape(Nnu,Nnu,Nw,1)) * \
-                           np.reshape( np.diag(Chi_0gen,axis1=0,axis2=1),newshape(1,Nnu,Nw,Nq)), \
-                           axis=1)
-    thetha_nu_w_q += 2.0 + gamma[0]*( 1.0+Uw*np.reshape(Chi_r_w_q[0],newshape=(1,Nw,Nq)) ) \
-        +3.0*gamma[1]*(-1.0+Uw*np.reshape(Chi_r_w_q[1],newshape=(1,Nw,Nq)))
+    return self_energy
 
-    G_aux = np.zeros( (Nw,Nq), dtype=np.complex128)
+#internal auxiliary routine
+@jit(nopython=True)
+def self_sum_Uw(theta:np.ndarray, Uw:np.ndarray, U, beta:np.float64, Nk:int, dim:int ): -> np.ndarray:
+    Nnu,Nw,Nqdim = theta.shape
+    Nnu/=2; Nw=(Nw+1)/2; Nq=int(Nqdim**(1/dim)))
+    self_en = np.zeros( (2*Nnu,Nk), dtype=np.complex128)
     for inu in range(-Nnu/2,Nnu/2):
+        nu=(np.pi/beta)*(2*inu+1)
         for ik in range(Nk):
-            k = k2ik(ik,dim,Nk)
-            Self_Energy[inu,ik] = -0.5*(1/beta**2)*np.sum( Uw[0,:,:]*thehta_nu_w_q[inu,:,:] * G_wq_given_nuk(nu,k,Self_old,Nw,Nq,beta)  )
+            k = ik2k(ik,dim,Nk)
+            self_en[inu,ik] = -(0.5/beta**2)*np.sum( ( (Uw[0,Nw,0]-Uw[0,:,:])   \ #fock term
+                    + (Uw[0,:,:]+U)*theta[inu,:,:]) * G_wq_given_nuk(nu,k,self_old,Nw,Nq,beta)  ) #vertex term
+    return self_en
 
-    #Hartree term
-    Self_Energy[:,:] += -2.0*(g**2/omega0)*dens
+#internal auxiliary routine
+@jit(nopython=True)
+def self_sum_U(theta:np.ndarray, U, beta:np.float64, Nk:int, dim:int ): -> np.ndarray:
+    Nnu,Nw,Nqdim = theta.shape
+    Nnu/=2; Nw=(Nw+1)/2; Nq=int(Nqdim**(1/dim)))
+    self_en = np.zeros( (2*Nnu,Nk), dtype=np.complex128)
+    for inu in range(-Nnu/2,Nnu/2):
+        nu=(np.pi/beta)*(2*inu+1)
+        for ik in range(Nk):
+            k = ik2k(ik,dim,Nk)
+            self_en[inu,ik] = -(0.5/beta**2)*np.sum( (U*theta[inu,:,:]) * G_wq_given_nuk(nu,k,self_old,Nw,Nq,beta)  ) #vertex term
+    return self_en
 
-    return something

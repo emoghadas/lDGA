@@ -14,11 +14,11 @@ name = "lDGA"
 version = "0.0.1"  
 authors = [
   { name="Emin Moghadas", email="emin.moghadas@tuwien.ac.at" },
-  { name="Samuele Giuli", email="s.giuli@sissa.it" }
+  { name="Samuele Giuli", email="sgiuli@sissa.it" }
 ]
 maintainers = [
   { name="Emin Moghadas", email="emin.moghadas@tuwien.ac.at" },
-  { name="Samuele Giuli", email="s.giuli@sissa.it" }
+  { name="Samuele Giuli", email="sgiuli@sissa.it" }
 ]
 description = "Ladder-DGammaA implementation for Hubbard-Holstein model"
 readme = "README.md"
@@ -32,7 +32,8 @@ dependencies = [
     "numpy",
     "matplotlib",
     "scipy",
-    "h5py"
+    "h5py",
+    "mpi4py"
 ]
 
 

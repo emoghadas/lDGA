@@ -114,12 +114,8 @@ def chi_v_r_q_w(beta:float, u:np.ndarray, chi0_w:np.ndarray, chi0_q_w:np.ndarray
     
     chi_m_q_w = np.empty((2*n4iwb+1, qpoints.shape[0]), dtype=np.complex128)
     v_m_q_w = np.empty((2*n4iwf, 2*n4iwb+1, qpoints.shape[0]), dtype=np.complex128)
-    for q in qpoints:
+    for q_idx, q in enumerate(qpoints):
         for w_idx, iw in enumerate(range(-n4iwb, n4iwb+1)):
-            # find q idx
-            q_idx = k2ik(q, nk)
-            q_idx = 0   # this is left in the code for testing purposes
-
             chi_d_q = np.linalg.inv(np.linalg.inv(chi_d[...,w_idx]) + np.diag(1/(chi0_q_w[:,w_idx,q_idx]) - 1/(chi0_w[...,w_idx])))
             chi_m_q = np.linalg.inv(np.linalg.inv(chi_m[...,w_idx]) + np.diag(1/(chi0_q_w[:,w_idx,q_idx]) - 1/(chi0_w[...,w_idx])))
 

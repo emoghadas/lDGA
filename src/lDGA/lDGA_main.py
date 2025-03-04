@@ -38,10 +38,6 @@ if n_qpoints%size!=0:
     raise ValueError("Number of q-points has to be multiple of number of processors")
 nq_local = n_qpoints/size
 
-# bubble terms on each process
-chi0_w = bse.chi0_loc_w(beta, g, n4iwf, n4iwb)
-chi0_q_w = bse.chi0_q_w(beta, mu, g, s, kdim, nq, niwf, n4iwf, n4iwb)
-
 # q-grid
 q = np.linspace(-np.pi,np.pi,nq,endpoint=False)
 if kdim==2:
@@ -56,6 +52,17 @@ else:
 # slice for each process
 q_range = slice(rank*nq_local, (rank+1)*nq_local)
 q_grid = q_grid[q_range,:]
+
+# local bubble on each process
+chi0_w = bse.chi0_loc_w(beta, g, n4iwf, n4iwb)
+
+# kgrid has to be initialized beforehand
+kpoints = np.linspace(-np.pi, np.pi, nk, endpoint=False)
+k_grid = np.meshgrid(kpoints, kpoints)
+k_grid = np.array(k_grid).reshape(2,-1).T
+
+# lattice bubble for each processes' q-points
+chi0_q_w = bse.chi0_q_w(beta, mu, s, k_grid, kdim, nk, q_grid, niwf, n4iwf, n4iwb)
 
 # compute chi and v
 w_n = 1j*2*np.arange(-n4iwb,n4iwb+1)*np.pi/beta

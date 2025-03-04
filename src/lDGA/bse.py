@@ -3,12 +3,13 @@ import numba
 from lDGA.utilities import k2ik
 #from ._fast_bubble import ek_3d, calc_bubble, calc_bubble_gl
 
-
-def ek_2d(t:float=0.25,tpr:float=0,tsec:float=0,kpoints:int=48,q:list[float,float]=[0.,0.]) -> np.ndarray:
-    "return 2d sqaured lattice Hamiltonian"
-    k = np.linspace(-np.pi,np.pi, kpoints, endpoint=False)
-    kx = np.array(k+q[0])[:,None]
-    ky = np.array(k+q[1])[None,:]
+@numba.njit
+def ek_2d(k:np.ndarray, t:float=0.25, tpr:float=0, tsec:float=0) -> np.float64:
+    '''
+    return 2d sqaured lattice Hamiltonian evaluated at give k-point
+    '''
+    kx = k[0]
+    ky = k[1]
     
     ek = - 2*t*(np.cos(kx) + np.cos(ky))\
                - 4*tpr*np.cos(kx)*np.cos(ky)\
@@ -16,61 +17,43 @@ def ek_2d(t:float=0.25,tpr:float=0,tsec:float=0,kpoints:int=48,q:list[float,floa
     return ek
 
 
-def gk_w(beta:float, mu:float, g:np.ndarray, s:np.ndarray, kdim:int, nk:int, iw:int, niwf:int) -> np.ndarray:
+@numba.njit
+def chi0_q_w(beta:float, mu:float, s:np.ndarray, k_grid:np.ndarray, kdim:int, nk:int, qpoints: np.ndarray, niwf:int, n4iwf:int, n4iwb:int) -> np.ndarray:
     '''
-    Compute lattice GF for given iw and q
+    Compute lattice bubble chi0 for all iw and range of q-points
     '''
-    iW = 1j*2*np.pi*iw / beta
-    ivs = 1j*(2*np.arange(-niwf,niwf)+1)*np.pi/beta 
-    if iw!=0:
-        ivs = ivs[abs(iw):-abs(iw)]
-    else:
-        ivs = ivs
-    iv_w = ivs + iW
+    chi0_qw = np.empty((2*n4iwf,2*n4iwb+1,qpoints.shape[0]), dtype=np.complex128)
+    for q_idx,q in enumerate(qpoints):
+        for w_idx,iw in enumerate(range(-n4iwb,n4iwb+1)):
+            # correct frequency shifts
+            iW = 1j*2*np.pi*iw / beta
+            iv = 1j*(2*np.arange(-niwf,niwf)+1)*np.pi/beta 
+            if iw!=0:
+                iv = iv[abs(iw):-abs(iw)]
+            else:
+                iv = iv
+            iv_w = iv + iW
 
-    kdim = np.ones((kdim,),dtype=np.int32)
+            if iw>0:
+                s_v = s[abs(iw):-abs(iw)]
+                s_v_w = s[2*iw:]
+            elif iw<0:
+                s_v = s[abs(iw):-abs(iw)]
+                s_v_w = s[:-2*abs(iw)]
+            else:
+                s_v = s
+                s_v_w = s
 
-    if iw>0:
-        s_v_w = s[2*iw:]
-    elif iw<0:
-        s_v_w = s[:-2*abs(iw)]
-    else:
-        s_v_w = s
+            bub = np.zeros((s_v.shape[0],), dtype=np.complex128)
+            for k in k_grid:
+                g_v = 1/(iv - ek_2d(k) + mu - s_v)
+                g_v_w = 1/(iv_w - ek_2d(k+q) + mu - s_v_w)
+                bub = bub - beta * (g_v*g_v_w) / nk**kdim
 
-    ek = ek_2d(kpoints=nk).flatten()
-
-    iv_w = iv_w.reshape(-1,1)
-    s_v_w = s_v_w.reshape(-1,1)
-    ek = ek.reshape(1,-1)
-    
-    gk_v_w = 1/(iv_w + mu - s_v_w - ek)
-    
-    return gk_v_w
-
-
-# TODO: test with looped bubble calculation, as fft underestimates chi_q
-def chi0_q_w(beta:float, mu:float, g:np.ndarray, s:np.ndarray, kdim:int, nk:int, niwf:int, n4iwf:int, n4iwb:int) -> np.ndarray:
-    '''
-    Compute lattice bubble for all q-points and iw
-    '''
-    chi0_qw = np.empty((2*n4iwf,2*n4iwb+1,nk**kdim), dtype=np.complex128)
-    for w_idx,iw in enumerate(range(-n4iwb,n4iwb+1)):
-        # get lattic gf with correct shifts
-        gk_v = gk_w(beta, mu, g, s, kdim, nk, 0, niwf)
-        if iw!=0:
-            gk_v = gk_v[abs(iw):-abs(iw),...]
-        gk_v_w = gk_w(beta, mu, g, s, kdim, nk, iw, niwf)
-
-        # fft
-        gr = np.fft.fftn(gk_v, axes=(-1,))
-        gr_w = np.fft.fftn(gk_v_w, axes=(-1,))
-        chi0 = -beta*np.fft.ifftn(gr*gr_w, axes=(-1,))/nk**kdim
-
-        # truncate nu tails
-        nu_range = slice(chi0.shape[0]//2-n4iwf,chi0.shape[0]//2+n4iwf)
-        chi0 = chi0[nu_range]
-
-        chi0_qw[:,w_idx,:] = chi0
+            nu_range = slice(bub.shape[0]//2-n4iwf, bub.shape[0]//2+n4iwf)
+            bub = bub[nu_range]
+            
+            chi0_qw[:,w_idx,q_idx] = bub
     return chi0_qw
 
 
@@ -96,13 +79,28 @@ def chi0_loc_w(beta: float, g:np.ndarray, n4iwf:int, n4iwb:int) -> np.ndarray:
     return chi0_w
 
 
-#TODO: extract loca lFs for all w
-def F_r_loc():
-    pass
+@numba.njit
+def F_r_loc(beta:float, chi0_w:np.ndarray, chi:np.ndarray, n4iwf:int, n4iwb:int) -> tuple[np.ndarray, np.ndarray]:
+    '''
+    Compute local vertex F for all iw
+    '''
+    chi_m = chi[0,...] - chi[1,...]
+    chi_d = chi[0,...] + chi[1,...]
+
+    F_d_w = np.empty((2*n4iwf, 2*n4iwf, 2*n4iwb+1), dtype=np.complex128)
+    F_m_w = np.empty((2*n4iwf, 2*n4iwf, 2*n4iwb+1), dtype=np.complex128)
+    for w_idx, iw in enumerate(range(-n4iwb,n4iwb+1)):
+        chi_vc = chi_d[:,:,w_idx] - np.diag(chi0_w[:,w_idx])
+        F_d_w[:,:,w_idx] = -np.diag(1/chi0_w[:,w_idx])@chi_vc@np.diag(1/chi0_w[:,w_idx])*beta**2
+
+        chi_vc = chi_m[:,:,w_idx] - np.diag(chi0_w[:,w_idx])
+        F_m_w[:,:,w_idx] = -np.diag(1/chi0_w[:,w_idx])@chi_vc@np.diag(1/chi0_w[:,w_idx])*beta**2
+
+    return F_d_w, F_m_w
 
 
-@numba.jit(nopython=True)
-def chi_v_r_q_w(beta:float, u:np.ndarray, chi0_w:np.ndarray, chi0_q_w:np.ndarray, g2:np.ndarray, niwf:int, n4iwf:int, n4iwb:int, qpoints:np.ndarray, nk:int) \
+@numba.njit
+def chi_v_r_q_w(beta:float, u:np.ndarray, chi0_w:np.ndarray, chi0_q_w:np.ndarray, g2:np.ndarray, n4iwf:int, n4iwb:int, qpoints:np.ndarray, nk:int) \
          -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     '''
     Compute physical susceptibility and three leg vertex of the lattice for all iw and given q-points
@@ -120,7 +118,7 @@ def chi_v_r_q_w(beta:float, u:np.ndarray, chi0_w:np.ndarray, chi0_q_w:np.ndarray
         for w_idx, iw in enumerate(range(-n4iwb, n4iwb+1)):
             # find q idx
             q_idx = k2ik(q, nk)
-            q_idx = 0
+            q_idx = 0   # this is left in the code for testing purposes
 
             chi_d_q = np.linalg.inv(np.linalg.inv(chi_d[...,w_idx]) + np.diag(1/(chi0_q_w[:,w_idx,q_idx]) - 1/(chi0_w[...,w_idx])))
             chi_m_q = np.linalg.inv(np.linalg.inv(chi_m[...,w_idx]) + np.diag(1/(chi0_q_w[:,w_idx,q_idx]) - 1/(chi0_w[...,w_idx])))
@@ -133,9 +131,9 @@ def chi_v_r_q_w(beta:float, u:np.ndarray, chi0_w:np.ndarray, chi0_q_w:np.ndarray
             v_m_q = np.sum(np.diag(1/chi0_q_w[:,w_idx,q_idx])@chi_m_q, axis=1)/(1 + u[w_idx]*chi_phys_m_q)
 
             # store quantities
-            chi_d_q_w[w_idx, q_idx] =  chi_phys_d_q
-            v_d_q_w[:,w_idx,q_idx] = v_d_q
-            chi_m_q_w[w_idx, q_idx] =  chi_phys_m_q
-            v_m_q_w[:,w_idx,q_idx] = v_m_q
+            chi_d_q_w[w_idx, 0] =  chi_phys_d_q
+            v_d_q_w[:,w_idx,0] = v_d_q
+            chi_m_q_w[w_idx,0] =  chi_phys_m_q
+            v_m_q_w[:,w_idx,0] = v_m_q
         
     return chi_d_q_w, v_d_q_w, chi_m_q_w, v_m_q_w

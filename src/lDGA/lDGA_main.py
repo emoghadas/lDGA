@@ -25,7 +25,7 @@ n4iwb = dga_cfg.n4iwb
 kdim = dga_cfg.kdim
 nk = dga_cfg.nk
 nq = dga_cfg.nq
-#TODO: extract holstein terms
+#TODO: has to be written manually
 w0 = dga_cfg.dmft_dict['w0']
 g0 = dga_cfg.dmft_dict['g0']
 

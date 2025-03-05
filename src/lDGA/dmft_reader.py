@@ -17,6 +17,8 @@ class DMFT_Reader:
             self.config.dmft_dict['beta'] = f['.config'].attrs['general.beta']
             self.config.dmft_dict['U'] = f['.config'].attrs['atoms.1.udd']
             self.config.dmft_dict['mu'] = f['.config'].attrs['general.mu']
+            occ = f['stat-last/ineq-001/occ/value'][()]
+            self.config.dmft_dict['occ'] = (occ[:,0,:,0] + occ[:,1,:,1])/2
 
             # read frequency infos
             niwf = f['.axes/iw'][()].shape[0]//2

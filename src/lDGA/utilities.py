@@ -39,7 +39,7 @@ def Udyn(omega:np.float64, omega0:np.float64, g:np.float64, U:np.float64 = 0.0) 
     return U - omega0*g**2/(omega0**2 + omega**2)
 
 @jit(nopython=True)
-def Udyn_arr(omegas:np.array , omega0:np.float64, g:np.float64, U:np.float64 = 0.0) -> np.float64:
+def Udyn_arr(omegas:np.ndarray , omega0:np.float64, g:np.float64, U:np.float64 = 0.0) -> np.ndarray:
     return U - omega0*g**2/(omega0**2 + omegas**2)
 
 ##### GREEN'S FUNCTION UTILITIES #####
@@ -62,7 +62,7 @@ def G_wq_given_nuk(nu:np.float64, k:np.ndarray, Sigma:np.ndarray, Nw:int, Nq:int
             nu_plus_w = nu+np.pi*(2.0*iw)/beta
             i_nuw = nu2inu(nu_plus_w, beta) #Here if nu+w is beyond our sigma we may want to implement a "tail" version of sigma
             if(i_nuw < -Nnu/2 or i_nuw >= Nnu/2 ): continue
-            Gres[iw,iq] += 1.0/(1j*nu_plus_w - eps_kq - Sigma[inuw+Nnu/2] )
+            Gres[iw,iq] += 1.0/(1j*nu_plus_w - eps_kq - Sigma[i_nuw+Nnu/2] )
     return Gres
 
 

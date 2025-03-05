@@ -123,8 +123,8 @@ def chi_v_r_q_w(beta:float, u:np.ndarray, chi0_w:np.ndarray, chi0_q_w:np.ndarray
             chi_phys_m_q = np.sum(chi_m_q)/beta**2
 
             # compute three-leg vertex
-            v_d_q = np.sum(np.diag(1/chi0_q_w[:,w_idx,q_idx])@chi_d_q, axis=1)/(1 - u[w_idx]*chi_phys_d_q)
-            v_m_q = np.sum(np.diag(1/chi0_q_w[:,w_idx,q_idx])@chi_m_q, axis=1)/(1 + u[w_idx]*chi_phys_m_q)
+            v_d_q = np.sum(np.diag(beta/chi0_q_w[:,w_idx,q_idx])@chi_d_q, axis=1)/(1 - u[w_idx]*chi_phys_d_q)
+            v_m_q = np.sum(np.diag(beta/chi0_q_w[:,w_idx,q_idx])@chi_m_q, axis=1)/(1 + u[w_idx]*chi_phys_m_q)
 
             # store quantities
             chi_d_q_w[w_idx, 0] =  chi_phys_d_q

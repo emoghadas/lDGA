@@ -5,17 +5,20 @@ import lDGA.dmft_reader as dmft_reader
 import lDGA.bse as bse
 import lDGA.utilities as util
 import lDGA.lambda_corr as lamb
-import mpi4py as MPI
+import lDGA.SDE as sde
+from mpi4py import MPI
 
 # TODO: check whether this can be done in parallel
-dmft_file = "b53_u2_4_2part-2022-11-19-Sat-07-10-47.hdf5"
+dmft_file = "../../example/b53_u2_4_2part-2022-11-19-Sat-07-10-47.hdf5"
 
 dga_cfg = cfg.DGA_Config(dmft_file)
 reader = dmft_reader.DMFT_Reader(dga_cfg)
 
-beta = dga_cfg.dmft_dict['beta']
+beta = np.float64(dga_cfg.dmft_dict['beta'])
 mu = dga_cfg.dmft_dict['mu']
 u = dga_cfg.dmft_dict['U']
+n = dga_cfg.dmft_dict['occ']
+print(n)
 g = dga_cfg.dmft_dict['giw']
 s = dga_cfg.dmft_dict['siw']
 chi = dga_cfg.dmft_dict['chi_ph']
@@ -26,8 +29,8 @@ kdim = dga_cfg.kdim
 nk = dga_cfg.nk
 nq = dga_cfg.nq
 #TODO: has to be written manually
-w0 = dga_cfg.dmft_dict['w0']
-g0 = dga_cfg.dmft_dict['g0']
+w0 = 1 #dga_cfg.dmft_dict['w0']
+g0 = 0 #dga_cfg.dmft_dict['g0']
 
 comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
@@ -50,8 +53,11 @@ else:
     raise ValueError("Number of dimension cannot exceed 3")
 
 # slice for each process
-q_range = slice(rank*nq_local, (rank+1)*nq_local)
+q_range = slice(int(rank*nq_local), int((rank+1)*nq_local))
+print(q_range)
 q_grid = q_grid[q_range,:]
+
+print("Calculate local bubble")
 
 # local bubble on each process
 chi0_w = bse.chi0_loc_w(beta, g, n4iwf, n4iwb)
@@ -61,13 +67,20 @@ kpoints = np.linspace(-np.pi, np.pi, nk, endpoint=False)
 k_grid = np.meshgrid(kpoints, kpoints)
 k_grid = np.array(k_grid).reshape(2,-1).T
 
+print("Calculate lattice bubble")
+
 # lattice bubble for each processes' q-points
 chi0_q_w = bse.chi0_q_w(beta, mu, s, k_grid, kdim, nk, q_grid, niwf, n4iwf, n4iwb)
+
+print("Calculate lattice susceptibility and hedin vertex")
 
 # compute chi and v
 w_n = 1j*2*np.arange(-n4iwb,n4iwb+1)*np.pi/beta
 u_w = util.Udyn_arr(w_n, w0, g0, u)
-chi_d_q_w, v_d_q_w, chi_m_q_w, v_m_q_w = bse.chi_v_r_q_w(beta, u, chi0_w, chi0_q_w, chi, niwf, n4iwf, n4iwb, q_grid, nk)
+print(u_w, type(u_w))
+chi_d_q_w, v_d_q_w, chi_m_q_w, v_m_q_w = bse.chi_v_r_q_w(beta, u, chi0_w, chi0_q_w, chi, n4iwf, n4iwb, q_grid, nk)
+
+print("Calculate lambda corrections")
 
 # lambda corrections
 chi_d_q_full = np.zeros([2*n4iwb, n_qpoints], dtype=np.complex128)
@@ -95,3 +108,15 @@ lambda_m = comm.bcast(lambda_m, root=0)
 chi_d_q_w = chi_d_q_w / (1 + lambda_d*chi_d_q_w)
 chi_m_q_w = chi_m_q_w / (1 + lambda_m*chi_m_q_w)
 
+print("Calculate SDE for selfenergy")
+
+# sde for selfenergy
+F_d_loc, F_m_loc = bse.F_r_loc(beta, chi0_w, chi, n4iwf, n4iwb)
+sigma = sde.Hubbard_Holstein_SDE(u, g0, w0, beta, v_d_q_w, v_m_q_w, chi_d_q_w, chi_m_q_w, F_d_loc, F_m_loc, chi0_q_w, s, n, nk, kdim)
+
+if rank==0:
+    sigma_full = np.zeros_like(sigma)
+
+comm.Reduce(sigma, sigma_full, op=MPI.SUM, root=0)
+
+# save sigma, chi_q

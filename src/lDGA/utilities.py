@@ -51,18 +51,32 @@ def Udyn_arr(omegas:np.ndarray , omega0:np.float64, g:np.float64, U:np.float64 =
 #N.B. this works only for DMFT self-energy with enough frequencies.
 # Auxiliary function for Swinger-Dyson Equations
 @jit(nopython=True)
-def G_wq_given_nuk(nu:np.float64, k:np.ndarray, Sigma:np.ndarray, Nw:int, Nq:int, beta:np.float64 )-> np.complex128:
+def G_wq_given_nuk(nu:np.float64, k:np.ndarray, Sigma:np.ndarray, Nw:int, Nq:int, beta:np.float64, mu:np.float64 )-> np.ndarray:
     dim = len(k); inu=nu2inu(nu, beta)
-    Gres = np.zeros( (2*Nw+1,Nq), dtype=np.complex128 )
+    Gres = np.zeros( (2*Nw-1,Nq), dtype=np.complex128 )
     Nnu = Sigma.shape[0]
     for iq in range(Nq):
         k_plus_q = k+ik2k(iq, dim, Nq)
         eps_kq = np.complex128(square_ek(k_plus_q, 1.0))
-        for iw in range(-Nw/2,1+Nw/2):
+        for iw in range(-Nw,1+Nw):
             nu_plus_w = nu+np.pi*(2.0*iw)/beta
             i_nuw = nu2inu(nu_plus_w, beta) #Here if nu+w is beyond our sigma we may want to implement a "tail" version of sigma
-            if(i_nuw < -Nnu/2 or i_nuw >= Nnu/2 ): continue
-            Gres[iw,iq] += 1.0/(1j*nu_plus_w - eps_kq - Sigma[i_nuw+Nnu/2] )
+            if(i_nuw < -Nnu//2 or i_nuw >= Nnu//2 ): continue
+            Gres[iw,iq] += 1.0/(1j*nu_plus_w + mu - eps_kq - Sigma[i_nuw+Nnu//2] )
+    return Gres
+
+
+@jit(nopython=True)
+def G_w_given_nu(nu:np.float64, g_loc:np.ndarray, Nw:int, beta:np.float64, mu:np.float64 )-> np.ndarray:
+    inu=nu2inu(nu, beta)
+    Gres = np.zeros( (2*Nw-1), dtype=np.complex128 )
+    Nnu = g_loc.shape[0]
+    for iw in range(-Nw+1,Nw):
+        nu_plus_w = nu+np.pi*(2.0*iw)/beta
+        i_nuw = nu2inu(nu_plus_w, beta) #Here if nu+w is beyond our sigma we may want to implement a "tail" version of sigma
+        if(i_nuw < -Nnu//2 or i_nuw >= Nnu//2 ): continue
+        #Gres[iw] += 1.0/(1j*nu_plus_w + mu - Sigma[i_nuw+Nnu//2] )
+        Gres[iw+Nw-1] = g_loc[i_nuw+Nnu//2]
     return Gres
 
 

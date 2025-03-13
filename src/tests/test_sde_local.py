@@ -14,7 +14,8 @@ import matplotlib.pyplot as plt
 class TestLocSDE(unittest.TestCase):
     def test_U_const(self):
         #dmft_file = "../example/b55_75_u2_4_2part-2024-05-02-Thu-18-57-28.hdf5"
-        dmft_file = "../example/b53_u2_4_2part-2022-11-19-Sat-07-10-47.hdf5"
+        #dmft_file = "../example/b53_u2_4_2part-2022-11-19-Sat-07-10-47.hdf5"
+        dmft_file = "../example/b55_75_u2_4_2part-2024-11-21-Thu-11-44-14.hdf5"
 
         dga_cfg = cfg.DGA_Config(dmft_file)
         reader = dmft_reader.DMFT_Reader(dga_cfg)
@@ -27,10 +28,11 @@ class TestLocSDE(unittest.TestCase):
         s = dga_cfg.dmft_dict['siw']
         chi = dga_cfg.dmft_dict['chi_ph']
         niwf = dga_cfg.niwf
-        n4iwf = 50 #dga_cfg.n4iwf
+        n4iwf = dga_cfg.n4iwf
         nu_range = slice(chi.shape[1]//2-n4iwf, chi.shape[1]//2+n4iwf)
-        chi = chi[:,nu_range,nu_range,:]
         n4iwb = dga_cfg.n4iwb
+        w_range = slice(chi.shape[-1]//2-n4iwb, chi.shape[-1]//2+n4iwb+1)
+        chi = chi[:,nu_range,nu_range,w_range]
         kdim = dga_cfg.kdim
         nk = 1 
         nq = 1 
@@ -60,7 +62,8 @@ class TestLocSDE(unittest.TestCase):
         print("Calculate SDE for selfenergy")
         sys.stdout.flush()
 
-        nu_range = slice(niwf-n4iwf, niwf+n4iwf)
+        nu_range_1 = slice(niwf-n4iwf, niwf+n4iwf)
+        nu_range_1 = slice(niwf-n4iwf, niwf+n4iwf)
 
         # sde for selfenergy
         F_d_loc, F_m_loc = bse.F_r_loc(beta, chi0_w, chi, n4iwf, n4iwb)
@@ -75,7 +78,7 @@ class TestLocSDE(unittest.TestCase):
         plt.plot(s[nu_range].imag, "--")
         plt.savefig("sde_local_check_imag.pdf")
 
-        assert np.allclose(s[nu_range], sigma, rtol=1e-1, atol=1e-1)
+        assert np.allclose(s[nu_range], sigma, rtol=1e-3, atol=1e-3)
 
 if __name__ == '__main__':
     unittest.main()

@@ -55,7 +55,7 @@ def Hubbard_Holstein_SDE_loc(U:np.float64, g:np.float64, omega0:np.float64, beta
     #Uw = Udyn_arr(omegas=wmats, omega0=omega0, g=g, U=0.0)
 
     theta_nu_w = np.zeros( (2*Nnu,2*Nw-1), dtype=np.complex128)
-    theta_nu_w -= 2.0*np.einsum('ijk,jk->ik', 0.5*(F_d_loc-F_m_loc), chi0_nu_w/beta)
+    theta_nu_w -= 2.0*np.einsum('ijk,jk->ik', (F_d_loc), chi0_nu_w/beta)
     theta_nu_w -= 2.0 + gamma_d + np.einsum('ij,ij,j->ij',gamma_d, (Uw+U), chi_d_w) \
                          -3.0*gamma_m + 3.0*np.einsum('ij,ij,j->ij',gamma_m, (Uw+U), chi_m_w)
 

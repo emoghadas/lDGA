@@ -42,6 +42,10 @@ def Udyn(omega:np.float64, omega0:np.float64, g:np.float64, U:np.float64 = 0.0) 
 def Udyn_arr(omegas:np.ndarray , omega0:np.float64, g:np.float64, U:np.float64 = 0.0) -> np.ndarray:
     return U - omega0*g**2/(omega0**2 + omegas**2)
 
+def U_trans(nu:np.ndarray, nup:np.ndarray, omega0:np.float64, g:np.float64, U:np.float64 = 0.0) -> np.ndarray:
+    omegas = nup.reshape(1, nup.shape[0]) - nu.reshape(nu.shape[0], 1)
+    return U - omega0*g**2/(omega0**2 + omegas**2)
+
 ##### GREEN'S FUNCTION UTILITIES #####
 
 #For the moment square (dim-dimensional hypercubic) dispersion only (using t=1)

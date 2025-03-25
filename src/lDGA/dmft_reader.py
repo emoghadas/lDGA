@@ -28,10 +28,25 @@ class DMFT_Reader:
             self.config.n4iwf = n4iwf
             self.config.n4iwb = n4iwb
 
+            #Phononic parameters
+            self.config.dmft_dict['w0']=1.0
+            self.config.dmft_dict['g0']=0.1**0.5
+
             # read Green's function
             giw = f['stat-last/ineq-001/giw/value'][0,0,:] * 0.5
             giw += f['stat-last/ineq-001/giw/value'][0,1,:] * 0.5
             self.config.dmft_dict['giw'] = giw
+
+            import matplotlib.pyplot as plt
+            plt.figure()
+            plt.plot(f['stat-last/ineq-001/giw/value'][0,0,:].imag,"-")
+            plt.plot(f['stat-last/ineq-001/giw/value'][0,1,:].imag,":")
+            plt.savefig("Gupdw_im.pdf")
+            plt.figure()
+            plt.plot(f['stat-last/ineq-001/giw/value'][0,0,:].real,"-")
+            plt.plot(f['stat-last/ineq-001/giw/value'][0,1,:].real,":")
+            plt.savefig("Gupdw_re.pdf")
+
 
             # read Selfenergy
             siw = f['stat-last/ineq-001/siw/value'][0,0,:] * 0.5

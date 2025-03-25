@@ -36,16 +36,16 @@ def square_ek(k:np.ndarray,t:np.float64) -> np.float64:
 #Maybe use multipledispatch for this and array?
 @jit(nopython=True)
 def Udyn(omega:np.float64, omega0:np.float64, g:np.float64, u:np.float64 = 0.0) -> np.float64:
-    return u - omega0*g**2/(omega0**2 + omega**2)
+    return u - 2*omega0*g**2/(omega0**2 + omega**2)
 
 @jit(nopython=True)
 def Udyn_arr(omega:np.ndarray , omega0:np.float64, g:np.float64, u:np.float64 = 0.0) -> np.ndarray:
-    return u - omega0*g**2/(omega0**2 + omega**2)
+    return u - 2*omega0*g**2/(omega0**2 + omega**2)
 
 @jit(nopython=True)
 def U_trans(nu:np.ndarray, nup:np.ndarray, omega0:np.float64, g:np.float64, u:np.float64 = 0.0) -> np.ndarray:
     omega = nup.reshape(1, nup.shape[0]) - nu.reshape(nu.shape[0], 1)
-    return u - omega0*g**2/(omega0**2 + omega**2)
+    return u - 2*omega0*g**2/(omega0**2 + omega**2)
 
 @jit(nopython=True)
 def build_w_mats(Nw:int, beta:np.float64) -> np.ndarray:

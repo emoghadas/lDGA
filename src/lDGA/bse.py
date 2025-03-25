@@ -111,7 +111,7 @@ def F_r_loc(beta:float, chi0_w:np.ndarray, chi:np.ndarray, n4iwf:int, n4iwb:int)
 
 @numba.njit(parallel=False)
 def chi_v_r_q_w(beta:float, u:np.float64, omega0:np.float64, g:np.float64 , chi0_w:np.ndarray, chi0_q_w:np.ndarray, chi:np.ndarray, n4iwf:int, n4iwb:int, qpoints:np.ndarray, nk:int) \
-         -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]: # chi_d, gamma_d, Uphi_d,  chi_m, gamma_m, Uphi_m
+         -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]: # chi_d, gamma_d, A,  chi_m, gamma_m, A
     '''
     Compute physical susceptibility and three leg vertex of the lattice for all iw and given q-points
     '''
@@ -121,10 +121,12 @@ def chi_v_r_q_w(beta:float, u:np.float64, omega0:np.float64, g:np.float64 , chi0
 
     chi_d_q_w  = np.empty((2*n4iwb+1, qpoints.shape[0]), dtype=np.complex128)
     v_d_q_w    = np.empty((2*n4iwf, 2*n4iwb+1, qpoints.shape[0]), dtype=np.complex128)
+    vR_d_q_w   = np.empty((2*n4iwf, 2*n4iwb+1, qpoints.shape[0]), dtype=np.complex128)
     A_d_q_w = np.empty((2*n4iwf, 2*n4iwb+1, qpoints.shape[0]), dtype=np.complex128)
     
     chi_m_q_w  = np.empty((2*n4iwb+1, qpoints.shape[0]), dtype=np.complex128)
     v_m_q_w    = np.empty((2*n4iwf, 2*n4iwb+1, qpoints.shape[0]), dtype=np.complex128)
+    vR_m_q_w   = np.empty((2*n4iwf, 2*n4iwb+1, qpoints.shape[0]), dtype=np.complex128)
     A_m_q_w = np.empty((2*n4iwf, 2*n4iwb+1, qpoints.shape[0]), dtype=np.complex128)
     
     numats = build_nu_mats(n4iwf,beta)
@@ -139,40 +141,40 @@ def chi_v_r_q_w(beta:float, u:np.float64, omega0:np.float64, g:np.float64 , chi0
     for q_idx, q in enumerate(qpoints):
         
         for w_idx, iw in enumerate(range(-n4iwb, n4iwb+1)):
-
+            
             chi_d_q = np.linalg.inv(np.linalg.inv(chi_d[...,w_idx]) + np.diag(1/(chi0_q_w[:,w_idx,q_idx]) - 1/(chi0_w[...,w_idx])))
             chi_m_q = np.linalg.inv(np.linalg.inv(chi_m[...,w_idx]) + np.diag(1/(chi0_q_w[:,w_idx,q_idx]) - 1/(chi0_w[...,w_idx])))
 
-            chi_phys_d_q = np.sum(chi_d_q)/beta**2 + asymp_chi(2*n4iwf, beta) 
+            chi_phys_d_q = np.sum(chi_d_q)/beta**2 + asymp_chi(2*n4iwf, beta)
             chi_phys_m_q = np.sum(chi_m_q)/beta**2 + asymp_chi(2*n4iwf, beta)
 
             # compute three-leg vertex
-            v_d_q = np.sum(np.diag(1/chi0_q_w[:,w_idx,q_idx])@chi_d_q, axis=1)/(1 - u_d[w_idx]*chi_phys_d_q)
-            v_m_q = np.sum(np.diag(1/chi0_q_w[:,w_idx,q_idx])@chi_m_q, axis=1)/(1 - u_m*chi_phys_m_q)
+            v_d_q  = np.sum(np.diag(1/chi0_q_w[:,w_idx,q_idx])@chi_d_q, axis=1)/(1 - u_d[w_idx]*chi_phys_d_q)
+            v_m_q  = np.sum(np.diag(1/chi0_q_w[:,w_idx,q_idx])@chi_m_q, axis=1)/(1 - u_m*chi_phys_m_q)
+
+            vR_d_q = np.sum(chi_d_q@np.diag(1/chi0_q_w[:,w_idx,q_idx]), axis=0)/(1 - u_d[w_idx]*chi_phys_d_q)
+            vR_m_q = np.sum(chi_m_q@np.diag(1/chi0_q_w[:,w_idx,q_idx]), axis=0)/(1 - u_m*chi_phys_m_q)
 
             #compute phi
-            #phi_d_q = chi_d_q + u_d[w_idx]*(1-u_d[w_idx]*chi_phys_d_q)*np.reshape(chi0_q_w[:,w_idx,q_idx]*v_d_q ,newshape=(2*n4iwf,1))*np.reshape(chi0_q_w[:,w_idx,q_idx]*v_d_q ,newshape=(1,2*n4iwf))/beta**2
-            #phi_m_q = chi_m_q + u_m*(1-u_m*chi_phys_m_q)*np.reshape(chi0_q_w[:,w_idx,q_idx]*v_m_q ,newshape=(2*n4iwf,1))*np.reshape(chi0_q_w[:,w_idx,q_idx]*v_m_q ,newshape=(1,2*n4iwf))/beta**2
+            #phi_d_q = chi_d_q + u_d[w_idx]*(1-u_d[w_idx]*chi_phys_d_q)*np.reshape(chi0_q_w[:,w_idx,q_idx]*v_d_q ,newshape=(2*n4iwf,1))*np.reshape(chi0_q_w[:,w_idx,q_idx]*vR_d_q ,newshape=(1,2*n4iwf))/beta**2
+            #phi_m_q = chi_m_q + u_m*(1-u_m*chi_phys_m_q)*np.reshape(chi0_q_w[:,w_idx,q_idx]*v_m_q ,newshape=(2*n4iwf,1))*np.reshape(chi0_q_w[:,w_idx,q_idx]*vR_m_q ,newshape=(1,2*n4iwf))/beta**2
             
             phi_d_q = chi_d_q + u_d[w_idx]*np.reshape(chi0_q_w[:,w_idx,q_idx]*v_d_q ,newshape=(2*n4iwf,1))*np.reshape( np.sum(chi_d_q,axis=1),newshape=(1,2*n4iwf))/beta**2
             phi_m_q = chi_m_q + u_m*np.reshape(chi0_q_w[:,w_idx,q_idx]*v_m_q ,newshape=(2*n4iwf,1))*np.reshape( np.sum(chi_m_q,axis=1) ,newshape=(1,2*n4iwf))/beta**2
 
-            #phi_d_q = chi_d_q/(1 - u_d[w_idx]*chi_phys_d_q)
-            #phi_m_q = chi_m_q/(1 - u_m*chi_phys_m_q)
-
-            # compute three-leg vertex
-            uphi_d_q = (1/chi0_q_w[:,w_idx,q_idx])*np.diag(  phi_d_q @ Ununup )*beta
-            uphi_m_q = (1/chi0_q_w[:,w_idx,q_idx])*np.diag(  phi_m_q @ Ununup )*beta
-
-            print("U:",u," - v:",v_m_q[:3]," - uphi:",uphi_m_q[:3]/beta)
+            # compute three-leg vertex A
+            A_d_q = (1/chi0_q_w[:,w_idx,q_idx])*np.diag(  phi_d_q @ Ununup )*beta
+            A_m_q = (1/chi0_q_w[:,w_idx,q_idx])*np.diag(  phi_m_q @ Ununup )*beta
 
             # store quantities
             chi_d_q_w[w_idx,0] =  chi_phys_d_q
             v_d_q_w[:,w_idx,0] = v_d_q
-            A_d_q_w[:,w_idx,0] = uphi_d_q
+            vR_d_q_w[:,w_idx,0] = vR_d_q
+            A_d_q_w[:,w_idx,0] = A_d_q
             #
             chi_m_q_w[w_idx,0] =  chi_phys_m_q
             v_m_q_w[:,w_idx,0] = v_m_q
-            A_m_q_w[:,w_idx,0] = uphi_m_q
+            vR_m_q_w[:,w_idx,0] = vR_m_q
+            A_m_q_w[:,w_idx,0] = A_m_q
         
-    return chi_d_q_w, v_d_q_w, A_d_q_w,   chi_m_q_w, v_m_q_w, A_m_q_w
+    return chi_d_q_w, v_d_q_w, vR_d_q_w, A_d_q_w,   chi_m_q_w, v_m_q_w, vR_m_q_w, A_m_q_w

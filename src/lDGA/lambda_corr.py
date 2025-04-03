@@ -2,7 +2,22 @@ import numpy as np
 from scipy.optimize import root_scalar, root
 from numba import jit
 
-#UNIFORM
+#PAULI PRINCIPLE
+# sum_wq chi^L_up,up = sum_wq ( chi_d + chi^L_m) = (n/2-1)*(n/2)
+@jit(nopython=True)
+def root_pauli( lambda_m:np.float64, beta:np.float64, Nk:int, chi_d_latt:np.ndarray, chi_m_latt:np.ndarray, dens:np.float64 )->np.float64:
+    return  (dens/2.0)*(1.0 - dens/2.0) - 0.5*np.abs(np.sum( np.sum(chi_d_latt,axis=1) +     1.0/np.sum(1.0/chi_m_latt + lambda_m,axis=1) ))/(beta*Nk)
+
+def get_lambda_pauli( lambda_m:np.float64, beta:np.float64, Nk:int, chi_d_latt:np.ndarray, chi_m_latt:np.ndarray, dens:np.float64 ):
+    root_sol = root(root_pauli,args=(beta,Nk,chi_d_latt,chi_m_latt,dens),x0=lambda_m,method="lm")
+    lambda_sol = root_sol.x
+    if(root_sol.success):
+        print("After ",root_sol.nfev," function evaluations, the root is found to be ",lambda_sol)
+    else:
+        print("Root finding did not converge. The best estimate is ",lambda_sol)
+    return lambda_sol
+
+#UNIFORM CHI_LOC = CHI_LATT
 @jit(nopython=True)
 def root_function_uniform(lambda_r:np.float64, beta:np.float64, Chi_w_q:np.ndarray, Chi_imp_w:np.ndarray) -> np.float64:
     # may want to assert dimensions of Chi_w_q and Chi_imp_w
@@ -18,7 +33,7 @@ def get_lambda_uniform(Chi_w_q:np.ndarray, Chi_imp_w:np.ndarray, beta:np.float64
         print("Root finding did not converge. The best estimate is ",root_sol.root)
     return root_sol.root
 
-#W-DEPENDENT
+#W-DEPENDENT CHI_LOC = CHI_LATT
 @jit(nopython=True)
 def root_function_wdep(lambda_r_w:np.ndarray, Chi_w_q:np.ndarray,Chi_imp_w:np.ndarray) -> np.ndarray:
     # may want to assert dimensions of Chi_w_q and Chi_imp_w

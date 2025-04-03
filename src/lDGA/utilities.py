@@ -67,15 +67,15 @@ def build_nu_mats(Nnu:int, beta:np.float64) -> np.ndarray:
 def G_wq_given_nuk(nu:np.float64, k:np.ndarray, Sigma:np.ndarray, Nw:int, Nq:int, beta:np.float64, mu:np.float64 )-> np.ndarray:
     dim = len(k); inu=nu2inu(nu, beta)
     Gres = np.zeros( (2*Nw-1,Nq), dtype=np.complex128 )
-    Nnu = Sigma.shape[0]
+    n2iwf = Sigma.shape[0]//2
     for iq in range(Nq):
         k_plus_q = k+ik2k(iq, dim, Nq)
         eps_kq = np.complex128(square_ek(k_plus_q, 1.0))
         for iw in range(-Nw,1+Nw):
             nu_plus_w = nu+np.pi*(2.0*iw)/beta
             i_nuw = nu2inu(nu_plus_w, beta) #Here if nu+w is beyond our sigma we may want to implement a "tail" version of sigma
-            if(i_nuw < -Nnu//2 or i_nuw >= Nnu//2 ): continue
-            Gres[iw,iq] = 1.0/(1j*nu_plus_w + mu - eps_kq - Sigma[i_nuw+Nnu//2] )
+            if(i_nuw < -n2iwf or i_nuw >= n2iwf ): continue
+            Gres[iw,iq] = 1.0/(1j*nu_plus_w + mu - eps_kq - Sigma[i_nuw+n2iwf] )
     return Gres
 
 

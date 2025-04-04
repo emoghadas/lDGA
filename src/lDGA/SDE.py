@@ -60,9 +60,9 @@ def Hubbard_Holstein_SDE(u:np.float64, g0:np.float64, omega0:np.float64, beta:np
     #N.B. now working only for a local self-energy, for SC-DGA to be corrected for a k-dependent one
     self_energy = self_sum_Uw(self_old, g_old, theta_nu_wq, omega0,g0, beta, Nk, dim, mu)
     #Hartree term
-    self_energy += dens*( u - (2.0*g0**2/omega0) )
+    self_energy += dens*( u - (4.0*g0**2/omega0) ) + g0**2/omega0
 
-    return self_energy# Swinger-Dyson for the Hubbard-Holstein model
+    return self_energy # Swinger-Dyson for the Hubbard-Holstein model
 
 
 #internal auxiliary routine
@@ -81,7 +81,7 @@ def self_sum_Uw(self_old:np.ndarray, g_old:np.ndarray, theta:np.ndarray,  omega0
 
         for inup in range(-nfiw,nfiw):
             nup=(np.pi/beta)*(2*inup+1)
-            self_en[inu+n4iwf] -= g_old[inup+nfiw]*Udyn(nu-nup,omega0,g,U=0.0)*np.exp(1j*nup*1e-10)/beta
+            self_en[inu+n4iwf] -= g_old[inup+nfiw]*Udyn(nu-nup,omega0,g,U=0.0)/beta
     return self_en/Nqdim
 
 #internal auxiliary routine
@@ -116,25 +116,25 @@ def Hubbard_Holstein_SDE_loc(u:np.float64, g0:np.float64, omega0:np.float64, bet
     #USING OUR FORMULA
     theta_nu_w = np.zeros( (2*n4iwf,2*n4iwb+1), dtype=np.complex128)
 
-    theta_nu_w += -4.0*ununup[0,0]+2.0*np.reshape(uw,newshape=(1,len(uw))) # U terms
+    theta_nu_w += -4.0*ununup[0,0] + 2.0*np.reshape(uw,newshape=(1,len(uw))) # U terms
 
-    theta_nu_w += -2*np.einsum('j,ij->ij',uw,gamma_d) + (A_d + 3*A_m)/beta # 34.1
+    theta_nu_w += -2*np.einsum('j,ij->ij', uw, gamma_d) + (A_d + 3*A_m)/beta # 34.1
 
-    theta_nu_w +=  np.einsum('ij,j,mj,mj->ij',gamma_d,2*uw*u_d*(1-u_d*chi_d_w) ,gammaR_d,chi0_nu_w)/beta**2 # 34.2
+    theta_nu_w +=  np.einsum('ij,j,mj,mj->ij', gamma_d, 2*uw*u_d*(1-u_d*chi_d_w), gammaR_d, chi0_nu_w)/beta**2 # 34.2
 
-    theta_nu_w -=  np.einsum('ij,j,im,mj,mj->ij',gamma_d,u_d*(1-u_d*chi_d_w),ununup,gammaR_d,chi0_nu_w)/beta**2 # 34.3
+    theta_nu_w -=  np.einsum('ij,j,im,mj,mj->ij', gamma_d, u_d*(1-u_d*chi_d_w), ununup, gammaR_d, chi0_nu_w)/beta**2 # 34.3
 
-    theta_nu_w -= 3*np.einsum('ij,j,im,mj,mj->ij',gamma_m,u_m*(1-u_m*chi_m_w),ununup,gammaR_m,chi0_nu_w)/beta**2 # 34.4
+    theta_nu_w -= 3*np.einsum('ij,j,im,mj,mj->ij', gamma_m, u_m*(1-u_m*chi_m_w), ununup, gammaR_m, chi0_nu_w)/beta**2 # 34.4
 
-    theta_nu_w -= 2*np.einsum('j,ikj,kj->ij',uw,F_d_loc,chi0_nu_w)/beta**2 #local part
+    theta_nu_w -= 2*np.einsum('j,ikj,kj->ij', uw, F_d_loc, chi0_nu_w)/beta**2 #local part
 
-    theta_nu_w += 2*u*np.einsum('ijk,jk->ik', F_d_loc+F_m_loc,chi0_nu_w)/(beta**2) # should be zero, subtracting the antiadiabatic part
+    theta_nu_w += 2*u*np.einsum('ijk,jk->ik', F_d_loc+F_m_loc, chi0_nu_w)/(beta**2) # should be zero, subtracting the antiadiabatic part
     #theta_nu_w += 2*ununup[0,0]*np.einsum('ijk,jk->ik', F_d_loc+F_m_loc,chi0_nu_w)/(beta**2) # should be zero, subtracting the antiadiabatic part
 
     #Here also Fock term
     self_energy = self_sum_Uw_loc(g_old, theta_nu_w, omega0,g0, beta)
     #Hartree term
-    self_energy += dens*( u - (4.0*g0**2/omega0) )
+    self_energy += dens*( u - (4.*g0**2/omega0) ) + g0**2/omega0 
 
 
 
@@ -143,7 +143,7 @@ def Hubbard_Holstein_SDE_loc(u:np.float64, g0:np.float64, omega0:np.float64, bet
     theta  = np.einsum('ijk,jk,k->ik', 2.0*F_d_loc ,chi0_nu_w,uw-u) #only ph
     theta  += np.einsum('ijk,jk->ik', (F_d_loc-F_m_loc) ,chi0_nu_w)*u #only hubb
     self_energy2 = self_sum_Uw_loc(g_old, theta, omega0, g0, beta)/(beta**2)
-    self_energy2 += dens*(u-4.0*g0**2/omega0)
+    self_energy2 += dens*( u - (4.*g0**2/omega0) ) + (g0**2/omega0) 
 
     return self_energy, self_energy2
 
@@ -177,9 +177,9 @@ def Hubbard_SDE_loc(u:np.float64, beta:np.float64, gamma_d:np.ndarray, gamma_m:n
     theta  = np.einsum('ijk,jk->ik', (F_d_loc-F_m_loc ),chi0_nu_w)
     self_energy2 = self_sum_Uw_loc(g_old, theta, 0.0, 0.0, beta)*u/(beta**2)
 
-    self_energy2 += dens*u
+    self_energy2 += dens*u 
 
-    return self_energy            ,self_energy2
+    return self_energy, self_energy2
 
 @jit(nopython=True)
 def self_sum_Uw_loc(g_old:np.ndarray, theta:np.ndarray, omega0:np.float64, g0:np.float64, beta:np.float64) -> np.ndarray:
@@ -194,11 +194,8 @@ def self_sum_Uw_loc(g_old:np.ndarray, theta:np.ndarray, omega0:np.float64, g0:np
         self_en[inu+n4iwf] +=  np.sum(theta[inu+n4iwf,:] * G_w_given_nu(nu,g_old,n4iwb,beta))*(0.5/beta)
         #Fock term
         if(g0!=0.0):
-            lambda_ph=2*g0**2/omega0
             for inup in range(-nfiw,nfiw):
                 nup=(np.pi/beta)*(2*inup+1)
-                #self_en[inu+n4iwf] -= (g_old[inup+nfiw])*( Udyn(nu-nup,omega0,g0,u=0.0)+lambda_ph )*np.exp(1j*nup*1e-10)/beta
-                self_en[inu+n4iwf] -= (g_old[inup+nfiw])*( Udyn(nu-nup,omega0,g0,u=0.0) )*np.exp(1j*nup*1e-10)/beta
-
+                self_en[inu+n4iwf] -= (g_old[inup+nfiw])*( Udyn(nu-nup,omega0,g0,u=0.0))/beta
 
     return self_en

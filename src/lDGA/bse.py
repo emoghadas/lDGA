@@ -109,7 +109,7 @@ def F_r_loc(beta:float, chi0_w:np.ndarray, chi:np.ndarray, n4iwf:int, n4iwb:int)
     return F_d_w, F_m_w
 
 
-@numba.njit(parallel=False)
+#@numba.njit(parallel=False)
 def chi_v_r_q_w(beta:float, u:np.float64, omega0:np.float64, g:np.float64 , chi0_w:np.ndarray, chi0_q_w:np.ndarray, chi:np.ndarray, n4iwf:int, n4iwb:int, qpoints:np.ndarray, nk:int) \
          -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]: # chi_d, gamma_d, A,  chi_m, gamma_m, A
     '''

@@ -107,7 +107,7 @@ class TestLocSDE(unittest.TestCase):
         plt.plot(s2.imag,":",label="with Floc Hubb")
         plt.plot(s2_hh.imag,":",label="with Floc HH")
         plt.plot(s[nu_range_1].imag, "--",label="Impurity")
-        #plt.xlim(75,175); plt.ylim(-0.1,0.1)
+        plt.xlim(75,175); plt.ylim(-0.1,0.1)
         plt.legend()
         plt.savefig("sde_local_check_imag.pdf")
 

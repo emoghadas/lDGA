@@ -128,8 +128,8 @@ def Hubbard_Holstein_SDE_loc(u:np.float64, g0:np.float64, omega0:np.float64, bet
 
     theta_nu_w -= 2*np.einsum('j,ikj,kj->ij', uw, F_d_loc, chi0_nu_w)/beta**2 #local part
 
+    #TODO: i think this should be a minus sign, but with high enough statistics and large tails it should vanish
     theta_nu_w += 2*u*np.einsum('ijk,jk->ik', F_d_loc+F_m_loc, chi0_nu_w)/(beta**2) # should be zero, subtracting the antiadiabatic part
-    #theta_nu_w += 2*ununup[0,0]*np.einsum('ijk,jk->ik', F_d_loc+F_m_loc,chi0_nu_w)/(beta**2) # should be zero, subtracting the antiadiabatic part
 
     #Here also Fock term
     self_energy = self_sum_Uw_loc(g_old, theta_nu_w, omega0,g0, beta)

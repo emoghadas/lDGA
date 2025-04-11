@@ -55,6 +55,17 @@ def build_w_mats(Nw:int, beta:np.float64) -> np.ndarray:
 def build_nu_mats(Nnu:int, beta:np.float64) -> np.ndarray:
     return (2.0*np.pi/beta)*(np.linspace(-Nnu,Nnu-1,2*Nnu)+0.5)
 
+#only work for square, to be generalized
+@jit(nopython=True)
+def build_k_grid(Nk:int, dim:int=2 ) -> np.ndarray:
+    Nkx = int( (Nk)**(1/dim) )
+    if( Nk!=Nkx**dim ): raise ValueError("Nkx**dim != Nk inside build_k_grid")
+    k_grid = np.zeros((Nk,dim),dtype=np.float64)
+    for ik in range(Nk):
+        k_grid[ik,:]=ik2k(ik,dim,Nkx)
+    return k_grid
+
+
 ##### GREEN'S FUNCTION UTILITIES #####
 
 #For the moment square (dim-dimensional hypercubic) dispersion only (using t=1)
@@ -63,19 +74,19 @@ def build_nu_mats(Nnu:int, beta:np.float64) -> np.ndarray:
 
 #N.B. this works only for DMFT self-energy with enough frequencies.
 # Auxiliary function for Swinger-Dyson Equations
-@jit(nopython=True)
-def G_wq_given_nuk(nu:np.float64, k:np.ndarray, Sigma:np.ndarray, Nw:int, Nq:int, beta:np.float64, mu:np.float64 )-> np.ndarray:
+#@jit(nopython=True)
+def G_wq_given_nuk(nu:np.float64, k:np.ndarray, sigma:np.ndarray, Nw:int, qpoints:np.ndarray, beta:np.float64, mu:np.float64 )-> np.ndarray:
     dim = len(k); inu=nu2inu(nu, beta)
-    Gres = np.zeros( (2*Nw-1,Nq), dtype=np.complex128 )
-    n2iwf = Sigma.shape[0]//2
-    for iq in range(Nq):
-        k_plus_q = k+ik2k(iq, dim, Nq)
-        eps_kq = np.complex128(square_ek(k_plus_q, 1.0))
+    Nq, dimq = qpoints.shape
+    Gres = np.zeros( (2*Nw+1,Nq), dtype=np.complex128 )
+    n2iwf = sigma.shape[0]//2
+    for iq,q in enumerate(qpoints):
+        eps_kq = np.complex128(square_ek(k+q, 1.0))
         for iw in range(-Nw,1+Nw):
             nu_plus_w = nu+np.pi*(2.0*iw)/beta
             i_nuw = nu2inu(nu_plus_w, beta) #Here if nu+w is beyond our sigma we may want to implement a "tail" version of sigma
             if(i_nuw < -n2iwf or i_nuw >= n2iwf ): continue
-            Gres[iw,iq] = 1.0/(1j*nu_plus_w + mu - eps_kq - Sigma[i_nuw+n2iwf] )
+            Gres[iw,iq] = 1.0/(1j*nu_plus_w + mu - eps_kq - sigma[i_nuw+n2iwf] )
     return Gres
 
 

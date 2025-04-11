@@ -12,7 +12,7 @@ import unittest
 import matplotlib.pyplot as plt
 
 class TestLocSDE(unittest.TestCase):
-    def test_U_const(self):
+    def test_U_dyn_local(self):
         #dmft_file = "../example/b55_75_u2_4_2part-2024-05-02-Thu-18-57-28.hdf5"
         #dmft_file = "../example/b53_u2_4_2part-2022-11-19-Sat-07-10-47.hdf5"
         #dmft_file = "../example/b55_75_u2_4_2part-2024-11-21-Thu-11-44-14.hdf5" # n4iwb=20
@@ -66,7 +66,7 @@ class TestLocSDE(unittest.TestCase):
         chi_m_loc = chi[0,...]-chi[1,...]
         chi_m_phys = np.sum(chi_m_loc, axis=(0,1))/beta**2 + bse.asymp_chi(2*n4iwf, beta)
 
-        _, v_d_w, vR_d_w, uphi_d_w, _, v_m_w, vR_m_w, uphi_m_w = bse.chi_v_r_q_w(beta, u, w0, g0, chi0_w, chi0_w.reshape(*chi0_w.shape,1), chi, n4iwf, n4iwb, np.array([[0.,0.]]), 1)
+        _, v_d_w, vR_d_w, uphi_d_w, _, v_m_w, vR_m_w, uphi_m_w = bse.chi_v_r_w_q(beta, u, w0, g0, chi0_w, chi0_w.reshape(*chi0_w.shape,1), chi, n4iwf, n4iwb, np.array([[0.,0.]]), 1)
         v_d_w = v_d_w[...,0]
         v_m_w = v_m_w[...,0]        
         vR_d_w = vR_d_w[...,0]
@@ -97,7 +97,7 @@ class TestLocSDE(unittest.TestCase):
         plt.plot(s2.real,":",label="with Floc Hubb")
         plt.plot(s2_hh.real,":",label="with Floc HH")
         plt.plot(s[nu_range_1].real, "--",label="impurity")
-        plt.xlim(100,150); plt.ylim(0.35,0.4)
+        plt.xlim(100,150); # plt.ylim(0.35,0.4)
         plt.legend()
         plt.savefig("sde_local_check_real.pdf")
 

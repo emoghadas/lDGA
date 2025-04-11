@@ -21,7 +21,7 @@ def Hubbard_SDE(u:np.float64, beta:np.float64, gamma_d:np.ndarray, gamma_m:np.nd
     return self_energy
 
 # Lattice Swinger-Dyson for the Hubbard-Holstein model
-def Hubbard_Holstein_SDE(u:np.float64, g0:np.float64, omega0:np.float64, beta:np.float64, gamma_d:np.ndarray, gamma_m:np.ndarray, A_d:np.ndarray, A_m:np.ndarray, chi_d_w_q:np.ndarray, chi_m_w_q:np.ndarray, F_d_loc:np.array, F_m_loc:np.array, chi0_nu_w_q:np.ndarray, self_old:np.ndarray, g_old:np.ndarray, dens:np.float64, Nk:int, mu:np.float64, dim:int=2):
+def Hubbard_Holstein_SDE(u:np.float64, g0:np.float64, omega0:np.float64, beta:np.float64, gamma_d:np.ndarray, gamma_m:np.ndarray, A_d:np.ndarray, A_m:np.ndarray, chi_d_w_q:np.ndarray, chi_m_w_q:np.ndarray, F_d_loc:np.array, F_m_loc:np.array, chi0_nu_w_q:np.ndarray, self_old:np.ndarray, g_old:np.ndarray, dens:np.float64, qpoints:np.ndarray, Nk:int, mu:np.float64, dim:int=2):
 
    #Here we also sum Fock term
     n4iwf = F_d_loc.shape[0]//2; n4iwb = chi_d_w_q.shape[0]//2
@@ -58,7 +58,7 @@ def Hubbard_Holstein_SDE(u:np.float64, g0:np.float64, omega0:np.float64, beta:np
 
     #Here also Fock term
     #N.B. now working only for a local self-energy, for SC-DGA to be corrected for a k-dependent one
-    self_energy = self_sum_Uw(self_old, g_old, theta_nu_wq, omega0,g0, beta, Nk, dim, mu)
+    self_energy = self_sum_Uw(self_old, g_old, theta_nu_wq, omega0,g0, beta, qpoints, Nk, dim, mu)
     #Hartree term
     self_energy += dens*( u - (2.0*g0**2/omega0) )
 
@@ -66,22 +66,23 @@ def Hubbard_Holstein_SDE(u:np.float64, g0:np.float64, omega0:np.float64, beta:np
 
 
 #internal auxiliary routine
-@jit(nopython=True)
-def self_sum_Uw(self_old:np.ndarray, g_old:np.ndarray, theta:np.ndarray,  omega0:np.float64, g:np.float64, beta:np.float64, Nk:int, dim:int , mu:np.float64) -> np.ndarray:
+#@jit(nopython=True)
+def self_sum_Uw(self_old:np.ndarray, g_old:np.ndarray, theta:np.ndarray,  omega0:np.float64, g0:np.float64, beta:np.float64, qpoints:np.ndarray,  Nk:int, dim:int , mu:np.float64) -> np.ndarray:
     n4iwf,n4iwb,Nqdim = theta.shape
     n4iwf//=2; n4iwb=n4iwb//2; Nq=int(Nqdim**(1/dim))
-    nfiw = g_old.shape[0] //2
+    niwf = g_old.shape[0] //2
+
     self_en = np.zeros((2*n4iwf,Nk), dtype=np.complex128)
 
     for inu in range(-n4iwf,n4iwf):
         nu=(np.pi/beta)*(2*inu+1)
         for ik in range(Nk):
             k = ik2k(ik,dim,Nk)
-            self_en[inu+n4iwf,ik] -=(0.5/beta**2)*np.sum( theta[inu+n4iwf,:,:] * G_wq_given_nuk(nu,k,self_old,n4iwf,Nq,beta,mu))/Nk #vertex term
-
-        for inup in range(-nfiw,nfiw):
-            nup=(np.pi/beta)*(2*inup+1)
-            self_en[inu+n4iwf] -= g_old[inup+nfiw]*Udyn(nu-nup,omega0,g,U=0.0)*np.exp(1j*nup*1e-10)/beta
+            self_en[inu+n4iwf,ik] -=(0.5/beta)*np.sum( theta[inu+n4iwf,:,:] * G_wq_given_nuk(nu,k,self_old,n4iwb,qpoints,beta,mu))/Nqdim #vertex term
+        if(g0!=0.0):
+            for inup in range(-niwf,niwf):
+                nup=(np.pi/beta)*(2*inup+1)
+                self_en[inu+n4iwf] -= g_old[inup+niwf]*Udyn(nu-nup,omega0,g0,u=0.0)*np.exp(1j*nup*1e-10)/beta
     return self_en/Nqdim
 
 #internal auxiliary routine

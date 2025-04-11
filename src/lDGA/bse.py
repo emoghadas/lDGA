@@ -156,8 +156,8 @@ def chi_v_r_w_q(beta:float, u:np.float64, omega0:np.float64, g:np.float64 , chi0
             vR_m_q = np.sum(chi_m_q@np.diag(1/chi0_w_q[:,w_idx,q_idx]), axis=0)/(1 - u_m*chi_phys_m_q)
 
             #compute phi
-            phi_d_q = chi_d_q + np.outer(chi0_q_w[:,w_idx,q_idx]*v_d_q, chi0_q_w[:,w_idx,q_idx]*v_d_q)*u_d[w_idx]*(1-u_d[w_idx]*chi_phys_d_q)/beta**2
-            phi_m_q = chi_m_q + np.outer(chi0_q_w[:,w_idx,q_idx]*v_m_q, chi0_q_w[:,w_idx,q_idx]*v_m_q)*u_m*(1-u_m*chi_phys_m_q)/beta**2
+            phi_d_q = chi_d_q + np.outer(chi0_w_q[:,w_idx,q_idx]*v_d_q, chi0_w_q[:,w_idx,q_idx]*v_d_q)*u_d[w_idx]*(1-u_d[w_idx]*chi_phys_d_q)/beta**2
+            phi_m_q = chi_m_q + np.outer(chi0_w_q[:,w_idx,q_idx]*v_m_q, chi0_w_q[:,w_idx,q_idx]*v_m_q)*u_m*(1-u_m*chi_phys_m_q)/beta**2
 
             # compute three-leg vertex A
             A_d_q = (1/chi0_w_q[:,w_idx,q_idx])*np.diag(  phi_d_q @ Ununup )*beta

@@ -66,7 +66,7 @@ def Hubbard_Holstein_SDE(u:np.float64, g0:np.float64, omega0:np.float64, beta:np
 
 
 #internal auxiliary routine
-#@jit(nopython=True)
+@jit(nopython=True)
 def self_sum_Uw(self_old:np.ndarray, g_old:np.ndarray, theta:np.ndarray,  omega0:np.float64, g0:np.float64, beta:np.float64, qpoints:np.ndarray,  Nk:int, dim:int , mu:np.float64) -> np.ndarray:
     n4iwf,n4iwb,Nqdim = theta.shape
     n4iwf//=2; n4iwb=n4iwb//2; Nq=int(Nqdim**(1/dim))
@@ -82,7 +82,7 @@ def self_sum_Uw(self_old:np.ndarray, g_old:np.ndarray, theta:np.ndarray,  omega0
         if(g0!=0.0):
             for inup in range(-niwf,niwf):
                 nup=(np.pi/beta)*(2*inup+1)
-                self_en[inu+n4iwf] -= g_old[inup+niwf]*Udyn(nu-nup,omega0,g0,u=0.0)*np.exp(1j*nup*1e-10)/beta
+                self_en[inu+n4iwf] -= g_old[inup+niwf]*Udyn(nu-nup,omega0,g0,u=0.0)/beta
     return self_en
 
 #internal auxiliary routine

@@ -58,7 +58,7 @@ def chi0_w_q(beta:float, mu:float, s:np.ndarray, k_grid:np.ndarray, kdim:int, nk
             for k in k_grid:
                 g_v = 1/(iv - ek_2d(k) + mu - s_v)
                 g_v_w = 1/(iv_w - ek_2d(k+q) + mu - s_v_w)
-                bub = bub - beta * (g_v*g_v_w) / nk**kdim
+                bub = bub - beta * (g_v*g_v_w) / nk
 
             nu_range = slice(bub.shape[0]//2-n4iwf, bub.shape[0]//2+n4iwf)
             bub = bub[nu_range]

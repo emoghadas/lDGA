@@ -74,7 +74,7 @@ def build_k_grid(Nk:int, dim:int=2 ) -> np.ndarray:
 
 #N.B. this works only for DMFT self-energy with enough frequencies.
 # Auxiliary function for Swinger-Dyson Equations
-#@jit(nopython=True)
+@jit(nopython=True)
 def G_wq_given_nuk(nu:np.float64, k:np.ndarray, sigma:np.ndarray, Nw:int, qpoints:np.ndarray, beta:np.float64, mu:np.float64 )-> np.ndarray:
     dim = len(k); inu=nu2inu(nu, beta)
     Nq, dimq = qpoints.shape

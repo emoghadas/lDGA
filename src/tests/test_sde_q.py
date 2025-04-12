@@ -35,7 +35,7 @@ class TestQSDE(unittest.TestCase):
         w_range = slice(chi.shape[-1]//2-n4iwb, chi.shape[-1]//2+n4iwb+1)
         chi = chi[:,nu_range,nu_range,w_range]
         kdim = dga_cfg.kdim
-        nk = 16
+        nk = 48
         nq = 4
         dim=2
         #TODO: has to be written manually
@@ -54,8 +54,27 @@ class TestQSDE(unittest.TestCase):
         sys.stdout.flush()
 
 
-        k_grid = util.build_k_grid(nk,dim)
-        q_grid = util.build_k_grid(nq,dim)
+        #k_grid = util.build_k_grid(nk,dim)
+        #q_grid = util.build_k_grid(nq,dim)
+
+        # kgrid has to be initialized beforehand
+        kpoints = np.linspace(-np.pi, np.pi, nk, endpoint=False)
+        k_grid = np.meshgrid(kpoints, kpoints)
+        k_grid = np.array(k_grid).reshape(2,-1).T
+        nk *= nk
+
+        # q-grid
+        q = np.linspace(-np.pi,np.pi,nq,endpoint=False)
+        if kdim==2:
+            q_grid = np.meshgrid(q,q)
+            q_grid = np.array(q_grid).reshape(2,-1).T
+        elif kdim==3:
+            q_grid = np.meshgrid(q,q,q)
+            q_grid = np.array(q_grid).reshape(3,-1).T
+        else:
+            raise ValueError("Number of dimension cannot exceed 3")
+        nq*=nq
+
         # local bubble on each process
         chi0_w = bse.chi0_loc_w(beta, g, n4iwf, n4iwb)
 
@@ -102,8 +121,9 @@ class TestQSDE(unittest.TestCase):
                                    
         plt.figure()
         plt.title("Re[Sigma]")
-        for ik,k in enumerate(k_grid):
-            plt.plot(nu,sigma_hh[:,ik].real,"-",label=f"(kx,ky)=({k[0]:.3f},{k[1]:.3f})")
+        #for ik,k in enumerate(k_grid):
+            #plt.plot(nu,sigma_hh[:,ik].real,"-",label=f"(kx,ky)=({k[0]:.3f},{k[1]:.3f})")
+        plt.plot(nu, np.sum(sigma_hh.real, axis=-1)/nk, "-")
         plt.plot(nuloc[locslice],s[locslice].real,":",label="local")
 #        plt.xlim(100,150)
         plt.ylim(0.35,0.4)
@@ -113,8 +133,9 @@ class TestQSDE(unittest.TestCase):
 
         plt.figure()
         plt.title("Im[Sigma]")
-        for ik,k in enumerate(k_grid):
-            plt.plot(nu,sigma_hh[:,ik].imag,"-",label=f"(kx,ky)=({k[0]:.3f},{k[1]:.3f})")
+        #for ik,k in enumerate(k_grid):
+        #    plt.plot(nu,sigma_hh[:,ik].imag,"-",label=f"(kx,ky)=({k[0]:.3f},{k[1]:.3f})")
+        plt.plot(nu, np.sum(sigma_hh.imag, axis=-1)/nk, "-")
         plt.plot(nuloc[locslice],s[locslice].imag,":",label="local")
         plt.xlim(-20,20)
         plt.ylim(-0.1,0.1)

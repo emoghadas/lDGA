@@ -83,7 +83,7 @@ def self_sum_Uw(self_old:np.ndarray, g_old:np.ndarray, theta:np.ndarray,  omega0
             for inup in range(-niwf,niwf):
                 nup=(np.pi/beta)*(2*inup+1)
                 self_en[inu+n4iwf] -= g_old[inup+niwf]*Udyn(nu-nup,omega0,g0,u=0.0)*np.exp(1j*nup*1e-10)/beta
-    return self_en/Nqdim
+    return self_en
 
 #internal auxiliary routine
 @jit(nopython=True)

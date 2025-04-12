@@ -35,7 +35,7 @@ class TestQSDE(unittest.TestCase):
         w_range = slice(chi.shape[-1]//2-n4iwb, chi.shape[-1]//2+n4iwb+1)
         chi = chi[:,nu_range,nu_range,w_range]
         kdim = dga_cfg.kdim
-        nk = 4
+        nk = 16
         nq = 4
         dim=2
         #TODO: has to be written manually
@@ -55,13 +55,14 @@ class TestQSDE(unittest.TestCase):
 
 
         k_grid = util.build_k_grid(nk,dim)
+        q_grid = util.build_k_grid(nq,dim)
         # local bubble on each process
         chi0_w = bse.chi0_loc_w(beta, g, n4iwf, n4iwb)
 
         print("Calculate q bubble")
         sys.stdout.flush()
         # wq bubble on each process
-        chi0_w_q = bse.chi0_w_q(beta, mu, s, k_grid, kdim, nk, k_grid, niwf, n4iwf, n4iwb)
+        chi0_w_q = bse.chi0_w_q(beta, mu, s, k_grid, kdim, nk, q_grid, niwf, n4iwf, n4iwb)
 
         print("Calculate local susceptibilities")
         sys.stdout.flush()
@@ -77,7 +78,7 @@ class TestQSDE(unittest.TestCase):
         print("Calculate edin vertex")
         sys.stdout.flush()
 
-        chi_d_w_q, v_d_w, vR_d_w, uphi_d_w, chi_m_w_q, v_m_w, vR_m_w, uphi_m_w = bse.chi_v_r_w_q(beta, u, w0, g0, chi0_w, chi0_w_q, chi, n4iwf, n4iwb, k_grid, nk)
+        chi_d_w_q, v_d_w, vR_d_w, uphi_d_w, chi_m_w_q, v_m_w, vR_m_w, uphi_m_w = bse.chi_v_r_w_q(beta, u, w0, g0, chi0_w, chi0_w_q, chi, n4iwf, n4iwb, q_grid, nk)
         
 
 
@@ -91,7 +92,7 @@ class TestQSDE(unittest.TestCase):
         F_d_loc, F_m_loc = bse.F_r_loc(beta, chi0_w, chi, n4iwf, n4iwb)
 
         #Doing DGA for dynamic U
-        sigma_hh = sde.Hubbard_Holstein_SDE(u, g0, w0, beta, v_d_w, v_m_w, uphi_d_w, uphi_m_w, chi_d_w_q, chi_m_w_q, F_d_loc, F_m_loc, chi0_w_q, s, g, n, k_grid, nk, mu, dim)
+        sigma_hh = sde.Hubbard_Holstein_SDE(u, g0, w0, beta, v_d_w, v_m_w, uphi_d_w, uphi_m_w, chi_d_w_q, chi_m_w_q, F_d_loc, F_m_loc, chi0_w_q, s, g, n, q_grid, nk, mu, dim)
 
 
         nu = util.build_nu_mats(n4iwf,beta)

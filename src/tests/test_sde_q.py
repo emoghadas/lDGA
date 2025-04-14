@@ -36,7 +36,7 @@ class TestQSDE(unittest.TestCase):
         chi = chi[:,nu_range,nu_range,w_range]
         kdim = dga_cfg.kdim
         nk = 48
-        nq = 4
+        nq = 2
         dim=2
         #TODO: has to be written manually
         w0 = dga_cfg.dmft_dict['w0']
@@ -126,8 +126,8 @@ class TestQSDE(unittest.TestCase):
         plt.plot(nu, np.sum(sigma_hh.real, axis=-1)/nk, "-")
         plt.plot(nuloc[locslice],s[locslice].real,":",label="local")
 #        plt.xlim(100,150)
-        plt.ylim(0.35,0.4)
-        plt.xlim(-20,20)
+        #plt.ylim(0.35,0.4)
+        #plt.xlim(-20,20)
         plt.legend()
         plt.savefig("sde_q_check_real.pdf")
 
@@ -137,8 +137,8 @@ class TestQSDE(unittest.TestCase):
         #    plt.plot(nu,sigma_hh[:,ik].imag,"-",label=f"(kx,ky)=({k[0]:.3f},{k[1]:.3f})")
         plt.plot(nu, np.sum(sigma_hh.imag, axis=-1)/nk, "-")
         plt.plot(nuloc[locslice],s[locslice].imag,":",label="local")
-        plt.xlim(-20,20)
-        plt.ylim(-0.1,0.1)
+        #plt.xlim(-20,20)
+        #plt.ylim(-0.1,0.1)
         plt.legend()
         plt.savefig("sde_q_check_imag.pdf")
 

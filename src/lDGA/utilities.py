@@ -86,7 +86,7 @@ def G_wq_given_nuk(nu:np.float64, k:np.ndarray, sigma:np.ndarray, Nw:int, qpoint
             nu_plus_w = nu+np.pi*(2.0*iw)/beta
             i_nuw = nu2inu(nu_plus_w, beta) #Here if nu+w is beyond our sigma we may want to implement a "tail" version of sigma
             if(i_nuw < -n2iwf or i_nuw >= n2iwf ): continue
-            Gres[iw,iq] = 1.0/(1j*nu_plus_w + mu - eps_kq - sigma[i_nuw+n2iwf] )
+            Gres[iw,iq] = 1.0 / ( 1j*nu_plus_w + mu - eps_kq - sigma[i_nuw+n2iwf] )
     return Gres
 
 

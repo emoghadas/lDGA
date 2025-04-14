@@ -37,17 +37,6 @@ class DMFT_Reader:
             giw += f['stat-last/ineq-001/giw/value'][0,1,:] * 0.5
             self.config.dmft_dict['giw'] = giw
 
-            import matplotlib.pyplot as plt
-            plt.figure()
-            plt.plot(f['stat-last/ineq-001/giw/value'][0,0,:].imag,"-")
-            plt.plot(f['stat-last/ineq-001/giw/value'][0,1,:].imag,":")
-            plt.savefig("Gupdw_im.pdf")
-            plt.figure()
-            plt.plot(f['stat-last/ineq-001/giw/value'][0,0,:].real,"-")
-            plt.plot(f['stat-last/ineq-001/giw/value'][0,1,:].real,":")
-            plt.savefig("Gupdw_re.pdf")
-
-
             # read Selfenergy
             siw = f['stat-last/ineq-001/siw/value'][0,0,:] * 0.5
             siw += f['stat-last/ineq-001/siw/value'][0,1,:] * 0.5

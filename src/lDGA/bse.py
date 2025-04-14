@@ -28,7 +28,7 @@ def ek_2d(k:np.ndarray, t:float=0.25, tpr:float=0, tsec:float=0) -> np.float64:
 
 
 @numba.njit
-def chi0_w_q(beta:float, mu:float, s:np.ndarray, k_grid:np.ndarray, kdim:int, nk:int, qpoints: np.ndarray, niwf:int, n4iwf:int, n4iwb:int) -> np.ndarray:
+def chi0_w_q(beta:float, mu:float, s:np.ndarray, k_grid:np.ndarray, nk:int, qpoints: np.ndarray, niwf:int, n4iwf:int, n4iwb:int) -> np.ndarray:
     '''
     Compute lattice bubble chi0 for all iw and range of q-points
     '''
@@ -56,8 +56,8 @@ def chi0_w_q(beta:float, mu:float, s:np.ndarray, k_grid:np.ndarray, kdim:int, nk
 
             bub = np.zeros((s_v.shape[0],), dtype=np.complex128)
             for k in k_grid:
-                g_v = 1/(iv - ek_2d(k) + mu - s_v)
-                g_v_w = 1/(iv_w - ek_2d(k+q) + mu - s_v_w)
+                g_v = 1/(iv - ek_2d(k, t=1) + mu - s_v)
+                g_v_w = 1/(iv_w - ek_2d(k+q, t=1) + mu - s_v_w)
                 bub = bub - beta * (g_v*g_v_w) / nk
 
             nu_range = slice(bub.shape[0]//2-n4iwf, bub.shape[0]//2+n4iwf)
@@ -109,8 +109,8 @@ def F_r_loc(beta:float, chi0_w:np.ndarray, chi:np.ndarray, n4iwf:int, n4iwb:int)
     return F_d_w, F_m_w
 
 
-#@numba.njit(parallel=False)
-def chi_v_r_w_q(beta:float, u:np.float64, omega0:np.float64, g:np.float64 , chi0_w:np.ndarray, chi0_w_q:np.ndarray, chi:np.ndarray, n4iwf:int, n4iwb:int, qpoints:np.ndarray, nk:int) \
+@numba.njit
+def chi_v_r_w_q(beta:float, u:np.float64, omega0:np.float64, g:np.float64 , chi0_w:np.ndarray, chi0_w_q:np.ndarray, chi:np.ndarray, n4iwf:int, n4iwb:int, qpoints:np.ndarray) \
          -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]: # chi_d, gamma_d, A,  chi_m, gamma_m, A
     '''
     Compute physical susceptibility and three leg vertex of the lattice for all iw and given q-points

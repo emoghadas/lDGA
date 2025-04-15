@@ -1,6 +1,8 @@
 import numpy as np
 from lDGA.utilities import ik2k, k2ik, G_wq_given_nuk, Udyn_arr, G_w_given_nu, U_trans, Udyn, build_nu_mats, build_w_mats
 from numba import jit
+from mpi4py import MPI
+
 
 # Lattice Swinger-Dyson for the Hubbard model
 def Hubbard_SDE(u:np.float64, beta:np.float64, gamma_d:np.ndarray, gamma_m:np.ndarray, chi_d_w_q:np.ndarray, chi_m_w_q:np.ndarray, F_d_loc:np.array, F_m_loc:np.array, chi0_nu_w_q:np.ndarray, self_old:np.ndarray, dens:np.float64, Nk:int, mu:np.float64, dim:int=2):
@@ -34,8 +36,8 @@ def Hubbard_Holstein_SDE(u:np.float64, g0:np.float64, omega0:np.float64, beta:np
 
     uw = Udyn_arr(omega=wmats, omega0=omega0, g=g0, u=u)
     ununup = U_trans(nu=numats,nup=numats, omega0=omega0, g=g0, u=u)
-    u_d = np.reshape(2*uw-u,newshape=(2*n4iwb+1,1))
-    u_m = np.reshape( -u ,newshape=(1,1) )
+    u_d = np.reshape(2*uw-u,newshape=(2*n4iwb+1,1)) # will  be U_d(w,nu)
+    u_m = np.reshape( -u ,newshape=(1,1) ) # will be U_m(w,nu)
 
     #USING OUR FORMULA
     theta_nu_wq = np.zeros( (2*n4iwf,2*n4iwb+1,Nq), dtype=np.complex128)
@@ -60,7 +62,10 @@ def Hubbard_Holstein_SDE(u:np.float64, g0:np.float64, omega0:np.float64, beta:np
     #N.B. now working only for a local self-energy, for SC-DGA to be corrected for a k-dependent one
     self_energy = self_sum_Uw(self_old, g_old, theta_nu_wq, omega0,g0, beta, qpoints, Nk, dim, mu)
     #Hartree term
-    self_energy += (dens*( u - (4.0*g0**2/omega0) ) + g0**2/omega0) /2 # this is left here because I use two cores for testing parallelism
+
+    #Hartree only on the master node
+    if(mpi_rank==0):
+        self_energy += (dens*( u - (4.0*g0**2/omega0) ) + g0**2/omega0)# this is left here because I use two cores for testing parallelism
 
     return self_energy # Swinger-Dyson for the Hubbard-Holstein model
 
@@ -69,7 +74,7 @@ def Hubbard_Holstein_SDE(u:np.float64, g0:np.float64, omega0:np.float64, beta:np
 @jit(nopython=True)
 def self_sum_Uw(self_old:np.ndarray, g_old:np.ndarray, theta:np.ndarray,  omega0:np.float64, g0:np.float64, beta:np.float64, qpoints:np.ndarray,  Nk:int, dim:int , mu:np.float64) -> np.ndarray:
     n4iwf,n4iwb,Nqdim = theta.shape
-    n4iwf//=2; n4iwb=n4iwb//2; Nq=int(Nqdim**(1/dim))
+    n4iwf//=2; n4iwb=n4iwb//2
     niwf = g_old.shape[0] //2
 
     self_en = np.zeros((2*n4iwf,Nk), dtype=np.complex128)
@@ -78,11 +83,11 @@ def self_sum_Uw(self_old:np.ndarray, g_old:np.ndarray, theta:np.ndarray,  omega0
         nu=(np.pi/beta)*(2*inu+1)
         for ik in range(Nk):
             k = ik2k(ik,dim,Nk)
-            self_en[inu+n4iwf,ik] -=(0.5/beta)*np.sum( theta[inu+n4iwf,:,:] * G_wq_given_nuk(nu,k,self_old,n4iwb,qpoints,beta,mu))/Nqdim #vertex term
+            self_en[inu+n4iwf,ik] +=(0.5/beta)*np.sum( theta[inu+n4iwf,:,:] * G_wq_given_nuk(nu,k,self_old,n4iwb,qpoints,beta,mu))/Nqdim #vertex term
         if(g0!=0.0):
             for inup in range(-niwf,niwf):
                 nup=(np.pi/beta)*(2*inup+1)
-                self_en[inu+n4iwf] -= g_old[inup+niwf]*Udyn(nu-nup,omega0,g0,u=0.0)/beta /2 # this is left here because I use two cores for testing parallelism
+                self_en[inu+n4iwf,:] -= g_old[inup+niwf]*Udyn(nu-nup,omega0,g0,u=0.0)*np.exp(1j*nup*1e-10)/beta
     return self_en
 
 #internal auxiliary routine

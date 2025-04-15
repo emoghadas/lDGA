@@ -63,9 +63,12 @@ def Hubbard_Holstein_SDE(u:np.float64, g0:np.float64, omega0:np.float64, beta:np
     self_energy = self_sum_Uw(self_old, g_old, theta_nu_wq, omega0,g0, beta, qpoints, Nk, dim, mu)
     #Hartree term
 
+    comm = MPI.COMM_WORLD
+    mpi_rank = comm.Get_size()
+
     #Hartree only on the master node
     if(mpi_rank==0):
-        self_energy += (dens*( u - (4.0*g0**2/omega0) ) + g0**2/omega0)# this is left here because I use two cores for testing parallelism
+        self_energy += (dens*( u - (4.0*g0**2/omega0) ) + g0**2/omega0)
 
     return self_energy # Swinger-Dyson for the Hubbard-Holstein model
 

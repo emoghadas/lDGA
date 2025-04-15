@@ -1,6 +1,8 @@
 import numpy as np
 from lDGA.utilities import ik2k, k2ik, G_wq_given_nuk, Udyn_arr, G_w_given_nu, U_trans, Udyn, build_nu_mats, build_w_mats
 from numba import jit
+from mpi4py import MPI
+
 
 # Lattice Swinger-Dyson for the Hubbard model
 def Hubbard_SDE(u:np.float64, beta:np.float64, gamma_d:np.ndarray, gamma_m:np.ndarray, chi_d_w_q:np.ndarray, chi_m_w_q:np.ndarray, F_d_loc:np.array, F_m_loc:np.array, chi0_nu_w_q:np.ndarray, self_old:np.ndarray, dens:np.float64, Nk:int, mu:np.float64, dim:int=2):
@@ -23,7 +25,7 @@ def Hubbard_SDE(u:np.float64, beta:np.float64, gamma_d:np.ndarray, gamma_m:np.nd
 # Lattice Swinger-Dyson for the Hubbard-Holstein model
 def Hubbard_Holstein_SDE(u:np.float64, g0:np.float64, omega0:np.float64, beta:np.float64, gamma_d:np.ndarray, gamma_m:np.ndarray, A_d:np.ndarray, A_m:np.ndarray, chi_d_w_q:np.ndarray, chi_m_w_q:np.ndarray, F_d_loc:np.array, F_m_loc:np.array, chi0_nu_w_q:np.ndarray, self_old:np.ndarray, g_old:np.ndarray, dens:np.float64, qpoints:np.ndarray, Nk:int, mu:np.float64, dim:int=2):
 
-   #Here we also sum Fock term
+    #Here we also sum Fock term
     n4iwf = F_d_loc.shape[0]//2; n4iwb = chi_d_w_q.shape[0]//2
     Nq    = chi_d_w_q.shape[1]
 
@@ -60,13 +62,19 @@ def Hubbard_Holstein_SDE(u:np.float64, g0:np.float64, omega0:np.float64, beta:np
     #N.B. now working only for a local self-energy, for SC-DGA to be corrected for a k-dependent one
     self_energy = self_sum_Uw(self_old, g_old, theta_nu_wq, omega0,g0, beta, qpoints, Nk, dim, mu)
     #Hartree term
-    self_energy += dens*( u - (4.0*g0**2/omega0) ) + g0**2/omega0
+
+    comm = MPI.COMM_WORLD
+    mpi_rank = comm.Get_size()
+
+    #Hartree only on the master node
+    if(mpi_rank==0):
+        self_energy += (dens*( u - (4.0*g0**2/omega0) ) + g0**2/omega0)
 
     return self_energy # Swinger-Dyson for the Hubbard-Holstein model
 
 
 #internal auxiliary routine
-#@jit(nopython=True)
+@jit(nopython=True)
 def self_sum_Uw(self_old:np.ndarray, g_old:np.ndarray, theta:np.ndarray,  omega0:np.float64, g0:np.float64, beta:np.float64, qpoints:np.ndarray,  Nk:int, dim:int , mu:np.float64) -> np.ndarray:
     n4iwf,n4iwb,Nqdim = theta.shape
     n4iwf//=2; n4iwb=n4iwb//2
@@ -130,7 +138,7 @@ def Hubbard_Holstein_SDE_loc(u:np.float64, g0:np.float64, omega0:np.float64, bet
     theta_nu_w -= 2*np.einsum('j,ikj,kj->ij', uw, F_d_loc, chi0_nu_w)/beta**2 #local part
 
     #TODO: i think this should be a minus sign, but with high enough statistics and large tails it should vanish
-    theta_nu_w += 2*u*np.einsum('ijk,jk->ik', F_d_loc+F_m_loc, chi0_nu_w)/(beta**2) # should be zero, subtracting the antiadiabatic part
+    theta_nu_w -= 2*u*np.einsum('ijk,jk->ik', F_d_loc+F_m_loc, chi0_nu_w)/(beta**2) # should be zero, subtracting the antiadiabatic part
 
     #Here also Fock term
     self_energy = self_sum_Uw_loc(g_old, theta_nu_w, omega0,g0, beta)

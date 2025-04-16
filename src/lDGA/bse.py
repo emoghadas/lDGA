@@ -28,10 +28,11 @@ def ek_2d(k:np.ndarray, t:float=0.25, tpr:float=0, tsec:float=0) -> np.float64:
 
 
 @numba.njit
-def chi0_w_q(beta:float, mu:float, s:np.ndarray, k_grid:np.ndarray, nk:int, qpoints: np.ndarray, niwf:int, n4iwf:int, n4iwb:int) -> np.ndarray:
+def chi0_w_q(beta:float, mu:float, s:np.ndarray, k_grid:np.ndarray, qpoints: np.ndarray, niwf:int, n4iwf:int, n4iwb:int) -> np.ndarray:
     '''
     Compute lattice bubble chi0 for all iw and range of q-points
     '''
+    nk = k_grid.shape[0]
     chi0_wq = np.empty((2*n4iwf,2*n4iwb+1,qpoints.shape[0]), dtype=np.complex128)
     for q_idx,q in enumerate(qpoints):
         for w_idx,iw in enumerate(range(-n4iwb,n4iwb+1)):

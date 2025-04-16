@@ -5,7 +5,7 @@ from mpi4py import MPI
 
 
 # Lattice Swinger-Dyson for the Hubbard model
-def Hubbard_SDE(u:np.float64, beta:np.float64, gamma_d:np.ndarray, gamma_m:np.ndarray, chi_d_w_q:np.ndarray, chi_m_w_q:np.ndarray, F_d_loc:np.array, F_m_loc:np.array, chi0_nu_w_q:np.ndarray, self_old:np.ndarray, dens:np.float64, Nk:int, mu:np.float64, dim:int=2):
+def Hubbard_SDE(u:np.float64, beta:np.float64, gamma_d:np.ndarray, gamma_m:np.ndarray, chi_d_w_q:np.ndarray, chi_m_w_q:np.ndarray, F_d_loc:np.array, F_m_loc:np.array, chi0_nu_w_q:np.ndarray, self_old:np.ndarray, dens:np.float64, qpoints:np.ndarray, Nk:int, mu:np.float64, dim:int=2):
     n4iwf=F_d_loc.shape[0]//2
     n4iwb,Nq = chi_d_w_q.shape
     n4iwb = n4iwb//2
@@ -16,14 +16,19 @@ def Hubbard_SDE(u:np.float64, beta:np.float64, gamma_d:np.ndarray, gamma_m:np.nd
     theta_nu_w_q -= 2.0*np.einsum('ijk,jkm->ikm', F_updn, chi0_nu_w_q)
     theta_nu_w_q += 2.0 + gamma_d + u*np.einsum('ijk,jk->ijk',gamma_d, chi_d_w_q) \
                          -3.0*gamma_m + 3.0*u*np.einsum('ijk,jk->ijk',gamma_m, chi_m_w_q)
-    self_energy = self_sum_U(self_old, theta_nu_w_q, u, beta, Nk, dim, mu)
+    self_energy = self_sum_U(self_old, theta_nu_w_q, u, beta, qpoints, Nk, dim, mu)
     #Hartree term
-    self_energy[:,:] += dens*u
+
+    comm = MPI.COMM_WORLD
+    mpi_rank = comm.Get_rank()
+    #Hartree only on the master node
+    if(mpi_rank==0):
+        self_energy[:,:] += dens*u
 
     return self_energy
 
 # Lattice Swinger-Dyson for the Hubbard-Holstein model
-def Hubbard_Holstein_SDE(u:np.float64, g0:np.float64, omega0:np.float64, beta:np.float64, gamma_d:np.ndarray, gamma_m:np.ndarray, A_d:np.ndarray, A_m:np.ndarray, chi_d_w_q:np.ndarray, chi_m_w_q:np.ndarray, F_d_loc:np.array, F_m_loc:np.array, chi0_nu_w_q:np.ndarray, self_old:np.ndarray, g_old:np.ndarray, dens:np.float64, qpoints:np.ndarray, Nk:int, mu:np.float64, dim:int=2):
+def Hubbard_Holstein_SDE(u:np.float64, g0:np.float64, omega0:np.float64, beta:np.float64, gamma_d:np.ndarray, gamma_m:np.ndarray, A_d:np.ndarray, A_m:np.ndarray, chi_d_w_q:np.ndarray, chi_m_w_q:np.ndarray, F_d_loc:np.array, F_m_loc:np.array, chi0_nu_w_q:np.ndarray, self_old:np.ndarray, g_old:np.ndarray, dens:np.float64, qpoints:np.ndarray, Nk:int, Nqtot:int, mu:np.float64, dim:int=2):
 
     #Here we also sum Fock term
     n4iwf = F_d_loc.shape[0]//2; n4iwb = chi_d_w_q.shape[0]//2
@@ -38,6 +43,8 @@ def Hubbard_Holstein_SDE(u:np.float64, g0:np.float64, omega0:np.float64, beta:np
     ununup = U_trans(nu=numats,nup=numats, omega0=omega0, g=g0, u=u)
     u_d = np.reshape(2*uw-u,newshape=(2*n4iwb+1,1)) # will  be U_d(w,nu)
     u_m = np.reshape( -u ,newshape=(1,1) ) # will be U_m(w,nu)
+
+    print("Nqtot:",Nqtot)
 
     #USING OUR FORMULA
     theta_nu_wq = np.zeros( (2*n4iwf,2*n4iwb+1,Nq), dtype=np.complex128)
@@ -58,13 +65,14 @@ def Hubbard_Holstein_SDE(u:np.float64, g0:np.float64, omega0:np.float64, beta:np
     theta_nu_wq += 2*u*np.einsum('imj,mjk->ijk', F_d_loc+F_m_loc,chi0_nu_w_q)/(beta**2) # should be zero, subtracting the antiadiabatic part
 
 
+    comm = MPI.COMM_WORLD
+    mpi_rank = comm.Get_rank()
+
     #Here also Fock term
     #N.B. now working only for a local self-energy, for SC-DGA to be corrected for a k-dependent one
-    self_energy = self_sum_Uw(self_old, g_old, theta_nu_wq, omega0,g0, beta, qpoints, Nk, dim, mu)
+    self_energy = self_sum_Uw(self_old, g_old, theta_nu_wq, omega0, g0, beta, qpoints, Nk, Nqtot, dim, mu, mpi_rank)
     #Hartree term
 
-    comm = MPI.COMM_WORLD
-    mpi_rank = comm.Get_size()
 
     #Hartree only on the master node
     if(mpi_rank==0):
@@ -75,8 +83,8 @@ def Hubbard_Holstein_SDE(u:np.float64, g0:np.float64, omega0:np.float64, beta:np
 
 #internal auxiliary routine
 @jit(nopython=True)
-def self_sum_Uw(self_old:np.ndarray, g_old:np.ndarray, theta:np.ndarray,  omega0:np.float64, g0:np.float64, beta:np.float64, qpoints:np.ndarray,  Nk:int, dim:int , mu:np.float64) -> np.ndarray:
-    n4iwf,n4iwb,Nqdim = theta.shape
+def self_sum_Uw(self_old:np.ndarray, g_old:np.ndarray, theta:np.ndarray,  omega0:np.float64, g0:np.float64, beta:np.float64, qpoints:np.ndarray,  Nk:int,  Nqtot:int, dim:int , mu:np.float64, mpi_rank:int) -> np.ndarray:
+    n4iwf,n4iwb,Nqloc = theta.shape
     n4iwf//=2; n4iwb=n4iwb//2
     niwf = g_old.shape[0] //2
 
@@ -86,8 +94,8 @@ def self_sum_Uw(self_old:np.ndarray, g_old:np.ndarray, theta:np.ndarray,  omega0
         nu=(np.pi/beta)*(2*inu+1)
         for ik in range(Nk):
             k = ik2k(ik,dim,Nk)
-            self_en[inu+n4iwf,ik] +=(0.5/beta)*np.sum( theta[inu+n4iwf,:,:] * G_wq_given_nuk(nu,k,self_old,n4iwb,qpoints,beta,mu))/Nqdim #vertex term
-        if(g0!=0.0):
+            self_en[inu+n4iwf,ik] +=(0.5/beta)*np.sum( theta[inu+n4iwf,:,:] * G_wq_given_nuk(nu,k,self_old,n4iwb,qpoints,beta,mu))/Nqtot #vertex term
+        if(g0!=0.0 and mpi_rank==0):
             for inup in range(-niwf,niwf):
                 nup=(np.pi/beta)*(2*inup+1)
                 self_en[inu+n4iwf,:] -= g_old[inup+niwf]*Udyn(nu-nup,omega0,g0,u=0.0)*np.exp(1j*nup*1e-10)/beta
@@ -95,16 +103,16 @@ def self_sum_Uw(self_old:np.ndarray, g_old:np.ndarray, theta:np.ndarray,  omega0
 
 #internal auxiliary routine
 @jit(nopython=True)
-def self_sum_U(self_old:np.array, theta:np.ndarray, U:np.float64, beta:np.float64, Nk:int, dim:int, mu:np.float64 ) -> np.ndarray:
-    Nnu,Nw,Nqdim = theta.shape
-    Nnu//=2; Nw=(Nw+1)//2; Nq=int(Nqdim**(1/dim))
-    self_en = np.zeros( (2*Nnu,Nk), dtype=np.complex128)
-    for inu in range(-Nnu,Nnu):
+def self_sum_U(self_old:np.array, theta:np.ndarray, U:np.float64, beta:np.float64, qpoints:np.ndarray, Nk:int,  Nqtot:int, dim:int, mu:np.float64 ) -> np.ndarray:
+    n4iwf,n4iwb,Nqloc = theta.shape
+    n4i2f//=2; n2iwb//=2;
+    self_en = np.zeros( (2*n4iwf,Nk), dtype=np.complex128)
+    for inu in range(-n4iwf,n4iwf):
         nu=(np.pi/beta)*(2*inu+1)
         for ik in range(Nk):
             k = ik2k(ik,dim,Nk)
-            self_en[inu,ik] = -(0.5/beta**2)*np.sum( (U*theta[inu,:,:]) * G_wq_given_nuk(nu,k,self_old,Nw,Nq,beta,mu)  ) #vertex term
-    return self_en/Nqdim
+            self_en[inu,ik] = -(0.5/beta**2)*np.sum( (U*theta[inu,:,:]) * G_wq_given_nuk(nu,k,self_old,n4iwb,qpoints,beta,mu)  ) #vertex term
+    return self_en/Nqtot
 
 
 # LOCAL TEST

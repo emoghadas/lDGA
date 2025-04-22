@@ -16,7 +16,7 @@ class TestLocSDE(unittest.TestCase):
         #dmft_file = "../example/b55_75_u2_4_2part-2024-05-02-Thu-18-57-28.hdf5"
         #dmft_file = "../example/b53_u2_4_2part-2022-11-19-Sat-07-10-47.hdf5"
         #dmft_file = "../example/b55_75_u2_4_2part-2024-11-21-Thu-11-44-14.hdf5" # n4iwb=20
-        dmft_file = "../example/gsq0_0_w1_n0_95_2p-2025-03-22-Sat-17-25-49.hdf5"
+        dmft_file = "../example/g0_n0_95_2p-2025-04-18-Fri-01-08-44.hdf5"
 
         dga_cfg = cfg.DGA_Config(dmft_file)
         reader = dmft_reader.DMFT_Reader(dga_cfg)
@@ -39,7 +39,7 @@ class TestLocSDE(unittest.TestCase):
         nq = 1 
         #TODO: has to be written manually
         w0 = dga_cfg.dmft_dict['w0']
-        g0 = dga_cfg.dmft_dict['g0']
+        g0 = 0 #dga_cfg.dmft_dict['g0']
 
         print("Doing Hubbard-Holstein calculation...")
         print(f" Here U={u} - g0={g0} - w0={w0}")
@@ -66,7 +66,7 @@ class TestLocSDE(unittest.TestCase):
         chi_m_loc = chi[0,...]-chi[1,...]
         chi_m_phys = np.sum(chi_m_loc, axis=(0,1))/beta**2 + bse.asymp_chi(2*n4iwf, beta)
 
-        _, v_d_w, vR_d_w, uphi_d_w, _, v_m_w, vR_m_w, uphi_m_w = bse.chi_v_r_w_q(beta, u, w0, g0, chi0_w, chi0_w.reshape(*chi0_w.shape,1), chi, n4iwf, n4iwb, np.array([[0.,0.]]), 1)
+        _, v_d_w, vR_d_w, uphi_d_w, _, v_m_w, vR_m_w, uphi_m_w = bse.chi_v_r_w_q(beta, u, w0, g0, chi0_w, chi0_w.reshape(*chi0_w.shape,1), chi, n4iwf, n4iwb, np.array([[0.,0.]]))
         v_d_w = v_d_w[...,0]
         v_m_w = v_m_w[...,0]        
         vR_d_w = vR_d_w[...,0]
@@ -97,9 +97,9 @@ class TestLocSDE(unittest.TestCase):
         plt.plot(s2.real,":",label="with Floc Hubb")
         plt.plot(s2_hh.real,":",label="with Floc HH")
         plt.plot(s[nu_range_1].real, "--",label="impurity")
-        plt.xlim(75,175); plt.ylim(0.35,0.4)
+        #plt.xlim(75,175); plt.ylim(0.35,0.4)
         plt.legend()
-        plt.savefig("sde_local_check_real.pdf")
+        plt.savefig("../example/sde_local_check_real.pdf")
 
         plt.figure()
         plt.plot(sigma.imag,"",marker="o",label="With gammas Hubb")
@@ -109,7 +109,7 @@ class TestLocSDE(unittest.TestCase):
         plt.plot(s[nu_range_1].imag, "--",label="Impurity")
         plt.xlim(75,175); plt.ylim(-0.1,0.1)
         plt.legend()
-        plt.savefig("sde_local_check_imag.pdf")
+        plt.savefig("../example/sde_local_check_imag.pdf")
 
         print(s[nu_range_1].real[n4iwf]-sigma_hh.real[n4iwf])
         sys.stdout.flush()

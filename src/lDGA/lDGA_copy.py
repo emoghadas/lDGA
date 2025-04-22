@@ -12,6 +12,7 @@ from mpi4py import MPI
 import sys
 
 # TODO: check whether this can be done in parallel
+#dmft_file = "../../example/g0_n0_95_2p-2025-04-18-Fri-01-08-44.hdf5"
 dmft_file = "../../example/gsq0_0_w1_n0_95_2p-2025-03-22-Sat-17-25-49.hdf5"
 
 dga_cfg = cfg.DGA_Config(dmft_file)
@@ -31,8 +32,8 @@ n4iwb = dga_cfg.n4iwb
 w_range = slice(chi.shape[-1]//2-n4iwb, chi.shape[-1]//2+n4iwb+1)
 chi = chi[:,nu_range,nu_range,w_range]
 kdim = dga_cfg.kdim
-nk = 2
-nq = 2
+nk = 4
+nq = 4
 dim=2
 #TODO: has to be written manually
 w0 = dga_cfg.dmft_dict['w0']
@@ -110,23 +111,24 @@ sigma_full = np.zeros_like(sigma) if rank==0 else None
 
 comm.Reduce(sigma, sigma_full, op=MPI.SUM, root=0)
 
-if rank==0:
+#if rank==0:
+if True:
     import matplotlib.pyplot as plt
     sigma_loc = np.sum(sigma_full, axis=1)/nk**2
-    plt.plot(s.imag[niwf-n4iwf:niwf+n4iwf], label="DMFT")
-    plt.plot(sigma_loc.imag, "--", label=r"D$\Gamma$A")
+    plt.plot(s.imag[niwf-20:niwf+20], ".-", label="DMFT")
+    plt.plot(sigma_loc.imag[n4iwf-20:n4iwf+20], "+--", label=r"D$\Gamma$A")
     plt.xlabel(r"$\nu$")
     plt.ylabel(r"$\Im\Sigma(\nu)$")
     plt.legend()
     plt.savefig("../../example/test_q_imag.pdf")
     plt.show()
 
-    plt.plot(s.real[niwf-n4iwf:niwf+n4iwf], label="DMFT")
-    plt.plot(sigma_loc.real, "--", label=r"D$\Gamma$A")
+    plt.plot(s.real[:], ".-", label="DMFT")
+    plt.plot(sigma_loc.real[:], "+--", label=r"D$\Gamma$A")
     plt.xlabel(r"$\nu$")
     plt.ylabel(r"$\Re\Sigma(\nu)$")
     plt.legend()
-    plt.savefig("../../test_q_real.pdf")
+    plt.savefig("../../example/test_q_real.pdf")
     plt.show()
     
 

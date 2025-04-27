@@ -72,3 +72,6 @@ Thumbs.db
 # emacs temporary files
 *~
 
+# Figures and data files
+*.pdf
+*.png

@@ -10,15 +10,18 @@ import lDGA.lambda_corr as lamb
 import lDGA.SDE as sde
 from mpi4py import MPI
 import sys
+import scipy.optimize as scop
 import matplotlib.pyplot as plt
 
 # TODO: check whether this can be done in parallel
-filenum=0 # 0 is Hubb only - 1 is Hubb-Hol
+filenum=2 # 0 is Hubb only - 1 is Hubb-Hol -2 is Hubb-Hol many freq
 match filenum:
     case 0:
         dmft_file = "../../example/Hubb/g0_n0_95_2p-2025-04-18-Fri-01-08-44.hdf5"
     case 1:
         dmft_file = "../../example/gsq0_0_w1_n0_95_2p-2025-03-22-Sat-17-25-49.hdf5"
+    case 2:
+        dmft_file = "../../example/gsq0_0_w1_n0_95_2p-2025-04-14-Mon-16-49-08.hdf5"
     case default:
         raise ValueError(f"Wrong filenum={filenum}")
 
@@ -49,6 +52,9 @@ match filenum:
     case 1:
         w0 = 1.0
         g0 = 0.1**0.5 
+    case 2:
+        w0 = 1.0
+        g0 = 0.1**0.5
     case default:
         raise ValueError(f"Wrong filenum={filenum}")
 
@@ -142,27 +148,73 @@ if(True):
         chi_d_loc = np.sum(chi_d_loc, axis=(0,1))/beta**2 + bse.asymp_chi(2*n4iwf, beta) #Tails correction are important to have Re[chi_loc]>0
         chi_m_loc = chi[0,...]-chi[1,...]
         chi_m_loc = np.sum(chi_m_loc, axis=(0,1))/beta**2 + bse.asymp_chi(2*n4iwf, beta) #Tails correction are important to have Re[chi_loc]>0
-        lambda_m = lamb.get_lambda_pauli( 0.01, beta, n_qpoints, chi_d_latt, chi_m_latt, n )
-        print("lambda_m = ",lambda_m)
+        #lambda_m = lamb.get_lambda_pauli( beta, n_qpoints, chi_d_latt, chi_m_latt, n, tail_flag=True)
+        #lambda_m_w, lambda_m_mp = lamb.get_lambda_wdep(chi_m_latt,chi_m_loc,beta)
+        #lambda_d_w, lambda_d_mp = lamb.get_lambda_wdep(chi_d_latt,chi_d_loc,beta)
+        #plt.figure()
+        #plt.plot(lambda_m_mp,label="lambda_m_mp")
+        #plt.plot(lambda_d_mp,label="lambda_d_mp")
+        #plt.savefig("lambda_mp.pdf")
+        #print("avg lambda_m = ",np.mean(lambda_m_w))
+        #print("avg lambda_d = ",np.mean(lambda_d_w))
+        lambda_array=np.linspace(-2,5,301)
+        root_imp_array=np.zeros_like(lambda_array)
+        root_dens_array=np.zeros_like(lambda_array)
+        root_denst_array=np.zeros_like(lambda_array)
+        for il in range(len(lambda_array)):
+            #root_array[il] = lamb.root_function_uniform(lambda_array[il],beta,chi_m_latt,chi_m_loc)
+            root_imp_array[il] = lamb.root_pauli(lambda_array[il],beta,chi_d_latt,chi_m_latt,chi_d_loc,chi_m_loc,False,0.1)
+            root_dens_array[il] = lamb.root_pauli_2(lambda_array[il],beta,chi_d_latt,chi_m_latt,n,False,0.1)
+            root_denst_array[il] = lamb.root_pauli_2(lambda_array[il],beta,chi_d_latt,chi_m_latt,n,True,0.1)
+        plt.figure()
+        plt.plot(lambda_array,root_imp_array,label="chi_imp")
+        plt.plot(lambda_array,root_dens_array,label="n wo tail")
+        plt.plot(lambda_array,root_denst_array,label="n w tails")
+        plt.grid()
+        plt.legend()
+        plt.savefig("root_vs_lam.pdf")
     else:
-        lambda_m = 0
+        lambda_m_w = np.zeros(n4iwb*2+1)
+        lambda_d_w = np.zeros(n4iwb*2+1)
 
-    lambda_m = comm.bcast(lambda_m, root=0)
-    lambda_d = 0.0
+    #lambda_m_w = comm.bcast(lambda_m_w, root=0)
+    #lambda_d_w = comm.bcast(lambda_d_w, root=0)
 
     # correct susceptibilities on each process
-    chi_d_w_q = chi_d_w_q / (1 + lambda_d*chi_d_w_q)
-    chi_m_w_q = chi_m_w_q / (1 + lambda_m*chi_m_w_q)
+    #chi_d_w_q = chi_d_w_q / (1 + np.reshape(lambda_d_w,newshape=(2*n4iwb+1,1))*chi_d_w_q)
+    #chi_m_w_q = chi_m_w_q / (1 + np.reshape(lambda_m_w,newshape=(2*n4iwb+1,1))*chi_m_w_q)
 
     if(rank==0):
         chi_d_latt0 = 1.0*chi_d_latt
         chi_m_latt0 = 1.0*chi_m_latt
 
-
         print(" *** pre lambda corr *** ")
         print( "n/2 * ( 1 - n/2 ) = ", (n)*(1.0-n) )
         print("from chi_loc  :", 0.5*np.sum(chi_m_loc +chi_d_loc )/beta )
         print("from chi_latt :", 0.5*np.sum(chi_m_latt+chi_d_latt)/beta/n_qpoints )
+
+        chi_uu_loc = 0.5*(chi_d_loc+chi_m_loc)[n4iwb:].real
+        chi_uu_loc[n4iwb] /= 2.0
+        chi_sum_uu = np.zeros_like(chi_uu_loc)
+        for iw in range(len(chi_sum_uu)):
+            chi_sum_uu[iw] = np.sum(chi_uu_loc[:iw])
+        chi_sum_2f = chi_sum_uu[-20:]
+        M_2f = np.arange(n4iwb-20,n4iwb)
+        def f2f(M,A,B):
+            return A-B/M
+        par, var = scop.curve_fit(f2f,M_2f,chi_sum_2f,p0=[0.25,1])
+        print("var:",var)
+        print("par:",par)
+        BetaTilde=par[1]*beta/(2*np.pi)**2
+                             
+        
+        plt.figure()
+        plt.plot(chi_sum_uu)
+        M_full=np.arange(20,100)
+        plt.plot(M_full, f2f(M_full,*par)  )
+        plt.xscale("log");plt.yscale("log")
+        plt.savefig("chi_sum.pdf")
+
         w_bos = util.build_w_mats(n4iwb,beta)
         plt.figure()
         plt.title("chiupup_loc_vs_latt")
@@ -171,6 +223,7 @@ if(True):
         tails = 1/w_bos**2
         tails[n4iwb]=0.0
         plt.scatter(w_bos, tails,label="tails" )
+        plt.scatter(w_bos, tails/0.7,label="tails tilde" )
         plt.legend()
         plt.yscale("log")
         plt.xscale("log")
@@ -178,7 +231,8 @@ if(True):
         plt.savefig("chiuu_without_lambdacorr.pdf")
 
         print(" *** post lambda corr *** ")
-        chi_m_latt = chi_m_latt/(1+lambda_m*chi_m_latt)
+        #chi_d_latt = chi_d_latt / (1 + np.reshape(lambda_d_w,newshape=(2*n4iwb+1,1))*chi_d_latt)
+        #chi_m_latt = chi_m_latt / (1 + np.reshape(lambda_m_w,newshape=(2*n4iwb+1,1))*chi_m_latt)
         print( "n/2 * ( 1 - n/2 ) = ", (n)*(1.0-n) )
         print("from chi_loc  :", 0.5*np.sum(chi_m_loc+chi_d_loc)/beta )
         print("from chi_latt :", 0.5*np.sum(chi_m_latt+chi_d_latt)/beta/n_qpoints )

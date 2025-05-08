@@ -2,6 +2,8 @@
 import os
 os.environ["OMP_NUM_THREADS"] = "1" 
 import numpy as np
+import h5py
+from datetime import datetime
 import lDGA.config as cfg
 import lDGA.dmft_reader as dmft_reader
 import lDGA.bse as bse
@@ -43,11 +45,13 @@ n4iwb = dga_cfg.n4iwb
 kdim = dga_cfg.kdim
 nk = dga_cfg.nk
 nq = dga_cfg.nq
-max_iter = dga_cfg.max_iter
+max_iter = 2 #dga_cfg.max_iter
 w0 = dga_cfg.w0
 g0 = dga_cfg.g0
 lambda_type = dga_cfg.lambda_type
-
+file_name = dga_cfg.file_name
+now_obj = datetime.now()
+now = now_obj.strftime("%Y-%m-%d_%H:%M:%S")
 
 match filenum:
     case 0:
@@ -99,7 +103,7 @@ else:
 q_range = slice(int(rank*nq_local), int((rank+1)*nq_local))
 q_grid_loc = q_grid[q_range,:]
 
-print("Calculate local bubble")
+print("Calculate local bubble - rank:",rank)
 sys.stdout.flush()
 
 # local bubble on each process
@@ -111,13 +115,13 @@ k_grid = np.meshgrid(kpoints, kpoints)
 k_grid = np.array(k_grid).reshape(2,-1).T
 n_kpoints = nk**kdim
 
-print("Calculate lattice bubble")
+print("Calculate lattice bubble - rank:",rank)
 sys.stdout.flush()
 
 # lattice bubble for each processes' q-points
 chi0_w_q = bse.chi0_w_q(beta, mu, s, k_grid, q_grid_loc, n4iwf, n4iwb)
 
-print("Calculate lattice susceptibility and hedin vertex")
+print("Calculate lattice susceptibility and hedin vertex - rank:",rank)
 sys.stdout.flush()
 
 # compute chi and v
@@ -125,7 +129,7 @@ chi_d_w_q, v_d_w_q, A_d, chi_m_w_q, v_m_w_q ,A_m = bse.chi_v_r_w_q(beta, u, w0, 
 
 
 
-print("Calculate chi_d/m_latt for lambda corrections")
+print("Calculate chi_d/m_latt for lambda corrections - rank:",rank)
 sys.stdout.flush()
 
 # lambda corrections
@@ -152,6 +156,7 @@ if rank==0:
     lambda_d0, lambda_m0 = lamb.lambda_correction(lambda_type,beta,chi_d_latt,chi_m_latt,chi_d_loc,chi_m_loc)
     lambda_d[:,0] = lambda_d0
     lambda_m[:,0] = lambda_m0
+
 
 
 lambda_d = comm.bcast(lambda_d, root=0)
@@ -185,7 +190,24 @@ if(rank==0):
     new_mu = util.get_mu( mu+0.1, n, sigma_dga, k_grid, beta )
 new_mu = comm.bcast(new_mu, root=0)
 
-# TODO hdf5 file to save stuff
+
+if(rank==0):
+    fsave = h5py.File(f'{file_name}_{now}.h5','a')
+    group = fsave.create_group('config')
+    group.create_dataset('max_iter',data=max_iter)
+    group.create_dataset('beta',data=beta)
+    group.create_dataset('dens',data=n)
+    group.create_dataset('u',data=u)
+    group.create_dataset('w0',data=w0)
+    group.create_dataset('g0',data=g0)
+    group = fsave.create_group('iter_0')
+    group.create_dataset('sigma',data=sigma_dga)
+    group.create_dataset('lambda_d',data=lambda_d)
+    group.create_dataset('lambda_m',data=lambda_m)
+    group.create_dataset('chi_d_latt',data=chi_d_latt)
+    group.create_dataset('chi_m_latt',data=chi_m_latt)
+    group.create_dataset('mu',data=new_mu)
+
 
 # Loop for Self-Consistent lDGA
 for iter in range(1,max_iter):
@@ -195,8 +217,6 @@ for iter in range(1,max_iter):
 
 
     chi0_w_q = bse.chi0_w_q(beta, new_mu, s, k_grid, q_grid_loc, n4iwf, n4iwb, sigma_dga)
-
-    print("irank",rank," there are Nans:" , np.any(np.isnan(chi0_w_q)))
 
     chi_d_w_q, v_d_w_q, A_d, chi_m_w_q, v_m_w_q ,A_m = bse.chi_v_r_w_q(beta, u, w0, g0, chi0_w, chi0_w_q, chi, n4iwf, n4iwb, q_grid_loc)
 
@@ -231,9 +251,20 @@ for iter in range(1,max_iter):
     
     #TODO SAVE STUFF
 
+
+    if(rank==0):
+        fsave = h5py.File('results.h5','a')
+        group = fsave.create_group(f'iter_{iter}')
+        group.create_dataset('sigma',data=sigma_dga)
+        group.create_dataset('lambda_d',data=lambda_d)
+        group.create_dataset('lambda_m',data=lambda_m)
+        group.create_dataset('chi_d_latt',data=chi_d_latt)
+        group.create_dataset('chi_m_latt',data=chi_m_latt)
+        group.create_dataset('mu',data=new_mu)
+        group.create_dataset('convg',data=convg)
     if(convg): break
     
-
 if(rank==0):
+    fsave.close()
     print("After exiting convg=",convg)
     print("error_sigma:",error_sigma)

@@ -41,7 +41,7 @@ def get_lambda_m_pauli( beta:np.float64, chi_d_latt:np.ndarray, chi_m_latt:np.nd
 
 #UNIFORM CHI_LOC = CHI_LATT
 @jit(nopython=True)
-def root_function_uniform(lambda_r:np.float64, beta:np.float64, chi_r_latt:np.ndarray, chi_r_loc:np.ndarray, lambda_maxpole:np.float) -> np.float64:
+def root_function_uniform(lambda_r:np.float64, beta:np.float64, chi_r_latt:np.ndarray, chi_r_loc:np.ndarray, lambda_maxpole:np.float64) -> np.float64:
     # may want to assert dimensions of Chi_w_q and Chi_imp_w
     Nqs = chi_r_latt.shape[1]
     return np.sum( chi_r_loc - np.sum( chi_r_latt/(1.0+lambda_r*chi_r_latt),axis=1)/Nqs  ).real/beta

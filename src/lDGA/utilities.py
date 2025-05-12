@@ -14,13 +14,48 @@ def ik2k(ik:int, dim:int, Nk:int) -> np.ndarray:
         ikres = ikres // Nk
     return k
 
+#@jit(nopython=True)
+#def k2ik(k:np.ndarray, Nk:int) -> int:
+#    dim = len(k)
+#    ik = 0
+#    for idim in range(dim):
+#        ik += (Nk*k[idim]/(2.0*np.pi) + 0.5*Nk) % Nk * Nk**idim
+#    return int(np.round(ik))
+
 @jit(nopython=True)
-def k2ik(k:np.ndarray, Nk:int) -> int:
+def wrap_k(k):
+    for i in range(len(k)):
+        while k[i] < -np.pi:
+            k[i] += 2 * np.pi
+        while k[i] >= np.pi:
+            k[i] -= 2 * np.pi
+    return k
+
+@jit(nopython=True)
+def k2ik(k: np.ndarray, Nk: int) -> int:
     dim = len(k)
     ik = 0
     for idim in range(dim):
-        ik += (Nk*k[idim]/(2.0*np.pi) + 0.5*Nk) % Nk * Nk**idim
-    return int(np.round(ik))
+        # Map from [-π, π) to [0, 1)
+        frac = (k[idim] + np.pi) / (2.0 * np.pi)
+
+        # Clamp just inside [0, 1)
+        if frac < 0.0:
+            frac = 0.0
+        elif frac >= 1.0:
+            frac = 1.0 - 1e-12
+
+        # Use floor for robustness, with a small bias
+        idx = int(np.floor(frac * Nk + 1e-8))
+
+        # Final clamp just in case
+        if idx < 0:
+            idx = 0
+        elif idx >= Nk:
+            idx = Nk - 1
+
+        ik += idx * Nk**idim
+    return ik
 
 @jit(nopython=True)
 def ek_2d(k:np.ndarray, t:float=0.25, tpr:float=0, tsec:float=0) -> np.float64:
@@ -91,7 +126,8 @@ def G_wq_given_nuk(nu:np.float64, k:np.ndarray, sigma:np.ndarray, n4iwb:int, qpo
             nu_plus_w = nu+np.pi*(2.0*iw)/beta
             i_nuw = nu2inu(nu_plus_w, beta) #Here if nu+w is beyond our sigma we may want to implement a "tail" version of sigma
             if( not(sigma_dga is None) and (i_nuw >= -n4iwf and i_nuw < n4iwf)): 
-                i_qk = k2ik(k+q,Nk_lin)
+                kq = wrap_k(k+q)
+                i_qk = k2ik(kq,Nk_lin)
                 Gres[iw+n4iwb,iq] = 1.0 / ( 1j*nu_plus_w + mu - eps_kq - sigma_dga[i_nuw+n4iwf,i_qk] )
             elif( (sigma_dga is None) or (i_nuw >= -niwf and i_nuw < niwf) ):
                 Gres[iw+n4iwb,iq] = 1.0 / ( 1j*nu_plus_w + mu - eps_kq - sigma[i_nuw+niwf] )
@@ -114,7 +150,6 @@ def G_w_given_nu(nu:np.float64, g_loc:np.ndarray, Nw:int, beta:np.float64)-> np.
 def mu_root(mu:np.float64,n_target:np.float64, sigma_dga:np.ndarray, eps_kgrid:np.ndarray, beta:np.float64):
     Nk = eps_kgrid.shape[0]; n4iwf = sigma_dga.shape[0]//2
     nu_array=build_nu_mats(n4iwf,beta).reshape(2*n4iwf,1)
-    print("testing mu=",mu)
     return n_target - (1.0/Nk/beta)*np.sum(  1.0/( 1j*nu_array +mu - eps_kgrid.reshape(1,Nk) -sigma_dga  ) - 1.0/(1j*nu_array ) ).real -0.5
 
 

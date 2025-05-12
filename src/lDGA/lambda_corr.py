@@ -16,6 +16,9 @@ def lambda_correction(lambda_type:str, beta:np.float64, chi_d_latt:np.ndarray, c
         case "Dynamical":
             lambda_m = get_lambda_wdep(beta, chi_m_latt, chi_m_loc)
             lambda_d = get_lambda_wdep(beta, chi_d_latt, chi_d_loc)
+        case "None":
+            lambda_m = 0
+            lambda_d = 0
         case default:
             raise ValueError(f"Wrong lambda_type={lambda_type}")
     return lambda_d, lambda_m

@@ -1,6 +1,8 @@
 # basic strucutre of ladder-DGA workflow
 import os
-os.environ["OMP_NUM_THREADS"] = "1" 
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
+os.environ["OPENBLAS_NUM_THREADS"] = "1"
 import numpy as np
 import h5py
 from datetime import datetime
@@ -45,10 +47,10 @@ n4iwb = dga_cfg.n4iwb
 kdim = dga_cfg.kdim
 nk = dga_cfg.nk
 nq = dga_cfg.nq
-max_iter = 2 #dga_cfg.max_iter
+max_iter = dga_cfg.max_iter
 w0 = dga_cfg.w0
 g0 = dga_cfg.g0
-lambda_type = dga_cfg.lambda_type
+lambda_type = "None" #dga_cfg.lambda_type
 file_name = dga_cfg.file_name
 now_obj = datetime.now()
 now = now_obj.strftime("%Y-%m-%d_%H:%M:%S")
@@ -175,8 +177,6 @@ sys.stdout.flush()
 F_d_loc, F_m_loc = bse.F_r_loc(beta, chi0_w, chi, n4iwf, n4iwb)
 sigma_dga_q = sde.Hubbard_Holstein_SDE(u, g0, w0, beta, v_d_w_q, v_m_w_q, A_d,A_m, chi_d_w_q, chi_m_w_q, F_d_loc, F_m_loc, chi0_w_q, s, g, n, q_grid_loc,n_kpoints, n_qpoints, mu, kdim)
 
-
-
 if(max_iter==1):
     sigma_dga = np.zeros_like(sigma_dga_q,dtype=np.complex128) if rank==0 else None
     comm.Reduce(sigma_dga_q, sigma_dga, op=MPI.SUM, root=0)
@@ -187,7 +187,7 @@ else:
 #Computing new mu
 new_mu=0.0
 if(rank==0):
-    new_mu = util.get_mu( mu+0.1, n, sigma_dga, k_grid, beta )
+    new_mu = util.get_mu( mu, n, sigma_dga, k_grid, beta )
 new_mu = comm.bcast(new_mu, root=0)
 
 
@@ -227,7 +227,7 @@ for iter in range(1,max_iter):
     chi_d_w_q = chi_d_w_q / (1.0 + lambda_d*chi_d_w_q)
     chi_m_w_q = chi_m_w_q / (1.0 + lambda_m*chi_m_w_q)
 
-    sigma_dga_q = sde.Hubbard_Holstein_SDE(u, g0, w0, beta, v_d_w_q, v_m_w_q, A_d,A_m, chi_d_w_q, chi_m_w_q, F_d_loc, F_m_loc, chi0_w_q, s, g, n, q_grid_loc,n_kpoints, n_qpoints, mu, kdim, sigma_dga)
+    sigma_dga_q = sde.Hubbard_Holstein_SDE(u, g0, w0, beta, v_d_w_q, v_m_w_q, A_d,A_m, chi_d_w_q, chi_m_w_q, F_d_loc, F_m_loc, chi0_w_q, s, g, n, q_grid_loc,n_kpoints, n_qpoints, new_mu, kdim, sigma_dga)
 
     if(rank==0):
         old_mu=new_mu*1
@@ -238,7 +238,7 @@ for iter in range(1,max_iter):
 
     new_mu=0.0
     if(rank==0):
-        new_mu = util.get_mu( mu+0.1, n, sigma_dga, k_grid, beta )
+        new_mu = util.get_mu( mu, n, sigma_dga, k_grid, beta )
     new_mu = comm.bcast(new_mu, root=0)
 
     convg=False
@@ -253,7 +253,7 @@ for iter in range(1,max_iter):
 
 
     if(rank==0):
-        fsave = h5py.File('results.h5','a')
+        fsave = h5py.File(f'{file_name}_{now}.h5','a')
         group = fsave.create_group(f'iter_{iter}')
         group.create_dataset('sigma',data=sigma_dga)
         group.create_dataset('lambda_d',data=lambda_d)

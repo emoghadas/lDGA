@@ -95,7 +95,7 @@ def self_sum_Uw(self_old:np.ndarray, g_old:np.ndarray, theta:np.ndarray,  omega0
         for ik in range(Nk):
             k = ik2k(ik,dim,Nk)
             self_en[inu+n4iwf,ik] +=(0.5/beta)*np.sum( theta[inu+n4iwf,:,:] * G_wq_given_nuk(nu,k,self_old,n4iwb,qpoints,beta,mu,self_dga))/Nqtot #vertex term
-            if( (g0!=0.0 and mpi_rank==0) and (not self_dga is None) ):
+            if( (g0!=0.0) and (not self_dga is None) ):
                 self_en[inu+n4iwf,ik] -= np.sum(G_wq_given_nuk(nu,k,self_old,n4iwb,qpoints,beta,mu,self_dga)*Udyn_arr(build_w_mats(n4iwb,beta),omega0,g0).reshape(2*n4iwb+1,1))/beta/Nqtot
         if( (g0!=0.0 and mpi_rank==0) and ( self_dga is None) ):
             for inup in range(-niwf,niwf):

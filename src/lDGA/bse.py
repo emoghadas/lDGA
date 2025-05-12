@@ -13,9 +13,6 @@ def asymp_chi(nu, beta):
     summ = np.sum(1/(2*np.arange(nu//2)+1)**2)
     return 2*beta*(1/8. - summ/np.pi**2)
 
-
-
-
 @jit(nopython=True)
 def chi0_w_q(beta:float, mu:float, s_dmft:np.ndarray, k_grid:np.ndarray, qpoints: np.ndarray, n4iwf:int, n4iwb:int, s_dga:np.ndarray=None) -> np.ndarray:
     '''

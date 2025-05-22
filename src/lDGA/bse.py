@@ -14,13 +14,18 @@ def asymp_chi(nu, beta):
     return 2*beta*(1/8. - summ/np.pi**2)
 
 @jit(nopython=True)
-def chi0_w_q(beta:float, mu:float, s_dmft:np.ndarray, k_grid:np.ndarray, qpoints: np.ndarray, n4iwf:int, n4iwb:int, s_dga:np.ndarray=None) -> np.ndarray:
+def chi0_w_q(beta:float, mu:float, s_dmft:np.ndarray, k_grid:np.ndarray, qpoints: np.ndarray, n4iwf:int, n4iwb:int, ts=None, s_dga:np.ndarray=None) -> np.ndarray:
     '''
     Compute lattice bubble chi0 for all iw and range of q-points
     '''
     nk = k_grid.shape[0]
     niwf  = s_dmft.shape[0]//2
     chi0_wq = np.zeros((2*n4iwf,2*n4iwb+1,qpoints.shape[0]), dtype=np.complex128)
+
+    if(ts is None):
+        t1=1.0; t2=0.0
+    else:
+        t1=ts[0]; t2=ts[1]
     
 
     nu_array=build_nu_mats(n4iwf, beta)
@@ -28,9 +33,9 @@ def chi0_w_q(beta:float, mu:float, s_dmft:np.ndarray, k_grid:np.ndarray, qpoints
         for ik,k in enumerate(k_grid):
             G_nuw_kq = G_wq_given_nuk(nu,k,s_dmft,n4iwb,qpoints,beta,mu, s_dga)
             if(s_dga is None):
-                G_nu_k = 1.0/(1j*nu - ek_2d(k, t=1) + mu - s_dmft[inu-n4iwf+niwf] )
+                G_nu_k = 1.0/(1j*nu - ek_2d(k,t=t1,tpr=t2) + mu - s_dmft[inu-n4iwf+niwf] )
             else:
-                G_nu_k = 1.0/(1j*nu - ek_2d(k, t=1) + mu - s_dga[inu,ik] )
+                G_nu_k = 1.0/(1j*nu - ek_2d(k, t=t1,tpr=t2) + mu - s_dga[inu,ik] )
             chi0_wq[inu,:,:] += G_nu_k*G_nuw_kq
     chi0_wq *= -beta/nk
     return chi0_wq

@@ -110,18 +110,23 @@ def build_nu_mats(Nnu:int, beta:np.float64) -> np.ndarray:
 #N.B. this works only for DMFT self-energy with enough frequencies.
 # Auxiliary function for Swinger-Dyson Equations
 @jit(nopython=True)
-def G_wq_given_nuk(nu:np.float64, k:np.ndarray, sigma:np.ndarray, n4iwb:int, qpoints:np.ndarray, beta:np.float64, mu:np.float64, sigma_dga:np.ndarray=None )-> np.ndarray:
+def G_wq_given_nuk(nu:np.float64, k:np.ndarray, sigma:np.ndarray, n4iwb:int, qpoints:np.ndarray, beta:np.float64, mu:np.float64, sigma_dga:np.ndarray=None,ts=None )-> np.ndarray:
     dim = len(k); inu=nu2inu(nu, beta)
     Nq, dimq = qpoints.shape
     Gres = np.zeros( (2*n4iwb+1,Nq), dtype=np.complex128 )
     niwf = sigma.shape[0]//2
     n4iwf = 0
+    if(ts is None):
+        t1=1.0; t2=0.0
+    else:
+        t1=ts[0]; t2=ts[1]
+
     if(not(sigma_dga is None)):
         Nk = sigma_dga.shape[1]
         Nk_lin = int(np.round(Nk**(1/dim)))
         n4iwf = sigma_dga.shape[0]//2
     for iq,q in enumerate(qpoints):
-        eps_kq = np.complex128(ek_2d(k+q, 1.0))
+        eps_kq = np.complex128(ek_2d(k+q, t=t1,tpr=t2))
 
         for iw in range(-n4iwb,1+n4iwb):
             nu_plus_w = nu+np.pi*(2.0*iw)/beta
@@ -154,11 +159,15 @@ def mu_root(mu:np.float64,n_target:np.float64, sigma_dga:np.ndarray, eps_kgrid:n
     return n_target - (1.0/Nk/beta)*np.sum(  1.0/( 1j*nu_array +mu - eps_kgrid.reshape(1,Nk) -sigma_dga  ) - 1.0/(1j*nu_array ) ).real -0.5
 
 
-def get_mu( mu_start:np.float64, n_target:np.float64, sigma_dga:np.ndarray, k_grid:np.ndarray, beta:np.float64 ):
+def get_mu( mu_start:np.float64, n_target:np.float64, sigma_dga:np.ndarray, k_grid:np.ndarray, beta:np.float64,ts=None ):
     print("Searching for new chemical potential...")
     eps_kgrid=np.zeros(k_grid.shape[0])
+    if(ts is None):
+        t1=1.0; t2=0.0
+    else:
+        t1=ts[0]; t2=ts[1]
     for ik,k in enumerate(k_grid):
-        eps_kgrid[ik] = ek_2d(k, 1.0)
+        eps_kgrid[ik] = ek_2d(k, t=t1, tpr=t2)
     root_sol = root(mu_root,args=(n_target,sigma_dga,eps_kgrid,beta),x0=mu_start,method="lm",tol=1e-10)
     mu_sol = root_sol.x[0]
     if(root_sol.success):

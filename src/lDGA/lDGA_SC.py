@@ -216,7 +216,7 @@ for iter in range(1,max_iter):
     print(f"***** Doing iter={iter} *****")
 
 
-    chi0_w_q = bse.chi0_w_q(beta, new_mu, s, k_grid, q_grid_loc, n4iwf, n4iwb, sigma_dga)
+    chi0_w_q = bse.chi0_w_q(beta, new_mu, s, k_grid, q_grid_loc, n4iwf, n4iwb, s_dga=sigma_dga)
 
     chi_d_w_q, v_d_w_q, A_d, chi_m_w_q, v_m_w_q ,A_m = bse.chi_v_r_w_q(beta, u, w0, g0, chi0_w, chi0_w_q, chi, n4iwf, n4iwb, q_grid_loc)
 

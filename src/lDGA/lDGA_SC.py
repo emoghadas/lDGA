@@ -18,7 +18,7 @@ import scipy.optimize as scop
 import matplotlib.pyplot as plt
 
 # TODO: check whether this can be done in parallel
-filenum=2 # 0 is Hubb only - 1 is Hubb-Hol -2 is Hubb-Hol many freq
+filenum=1 # 0 is Hubb only - 1 is Hubb-Hol -2 is Hubb-Hol many freq
 match filenum:
     case 0:
         dmft_file = "../../example/Hubb/g0_n0_95_2p-2025-04-18-Fri-01-08-44.hdf5"
@@ -109,7 +109,11 @@ print("Calculate local bubble - rank:",rank)
 sys.stdout.flush()
 
 # local bubble on each process
-chi0_w = bse.chi0_loc_w(beta, g, n4iwf, n4iwb)
+#chi0_w = bse.chi0_loc_w(beta, g, n4iwf, n4iwb)
+nouter=300
+chi0_w_full = bse.chi0_loc_w_full(beta, g, n4iwf, n4iwb, nouter)
+chi0_w = chi0_w_full[nouter-n4iwf:nouter+n4iwf,...]
+dgamma_d, dgamma_m = bse.gamma_w(beta, u, w0, g0, chi0_w_full, chi, n4iwf, n4iwb, nouter)
 
 # kgrid has to be initialized beforehand
 kpoints = np.linspace(-np.pi, np.pi, nk, endpoint=False)
@@ -127,8 +131,8 @@ print("Calculate lattice susceptibility and hedin vertex - rank:",rank)
 sys.stdout.flush()
 
 # compute chi and v
-chi_d_w_q, v_d_w_q, A_d, chi_m_w_q, v_m_w_q ,A_m = bse.chi_v_r_w_q(beta, u, w0, g0, chi0_w, chi0_w_q, chi, n4iwf, n4iwb, q_grid_loc)
-
+#chi_d_w_q, v_d_w_q, A_d, chi_m_w_q, v_m_w_q ,A_m = bse.chi_v_r_w_q(beta, u, w0, g0, chi0_w, chi0_w_q, chi, n4iwf, n4iwb, q_grid_loc)
+chi_d_w_q, v_d_w_q, A_d, chi_m_w_q, v_m_w_q ,A_m = bse.bse_asymp(beta, u, w0, g0, chi0_w_full, chi0_w_q, dgamma_d, dgamma_m, nouter, n4iwf, n4iwb, q_grid_loc)
 
 
 print("Calculate chi_d/m_latt for lambda corrections - rank:",rank)
@@ -218,7 +222,8 @@ for iter in range(1,max_iter):
 
     chi0_w_q = bse.chi0_w_q(beta, new_mu, s, k_grid, q_grid_loc, n4iwf, n4iwb, s_dga=sigma_dga)
 
-    chi_d_w_q, v_d_w_q, A_d, chi_m_w_q, v_m_w_q ,A_m = bse.chi_v_r_w_q(beta, u, w0, g0, chi0_w, chi0_w_q, chi, n4iwf, n4iwb, q_grid_loc)
+    #chi_d_w_q, v_d_w_q, A_d, chi_m_w_q, v_m_w_q ,A_m = bse.chi_v_r_w_q(beta, u, w0, g0, chi0_w, chi0_w_q, chi, n4iwf, n4iwb, q_grid_loc)
+    chi_d_w_q, v_d_w_q, A_d, chi_m_w_q, v_m_w_q ,A_m = bse.bse_asymp(beta, u, w0, g0, chi0_w_full, chi0_w_q, dgamma_d, dgamma_m, nouter, n4iwf, n4iwb, q_grid_loc)
 
     #TODO: LAMBDA DECAY PROCEDURE
     lambda_d *= np.exp(-iter)

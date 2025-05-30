@@ -1,6 +1,6 @@
 import numpy as np
 from numba import jit
-from lDGA.utilities import k2ik, build_nu_mats, build_w_mats, U_trans, Udyn_arr, G_wq_given_nuk, ek_2d
+from lDGA.utilities import k2ik, build_nu_mats, build_w_mats, U_trans, Udyn, Udyn_arr, G_wq_given_nuk, ek_2d
 #from ._fast_bubble import ek_3d, calc_bubble, calc_bubble_gl
 
 @jit(nopython=True)
@@ -141,3 +141,108 @@ def chi_v_r_w_q(beta:float, u:np.float64, omega0:np.float64, g:np.float64 , chi0
             A_m_w_q[:,w_idx,q_idx] = A_m_q
 
     return chi_d_w_q, v_d_w_q, A_d_w_q,   chi_m_w_q, v_m_w_q, A_m_w_q
+
+
+# new funcs for u asymp
+
+@jit(nopython=True)
+def chi0_loc_w_full(beta: float, g:np.ndarray, n4iwf:int, n4iwb:int, nouter) -> np.ndarray:
+    '''
+    Compute local bubble for all iw
+    '''
+    chi0_w = np.empty((2*nouter,2*n4iwb+1), dtype=np.complex128)
+    for w_idx, iw in enumerate(range(-n4iwb,n4iwb+1)):
+        if iw>0:
+            g_nu = g[iw:-iw]
+            g_nu_omega = g[2*iw:]
+        elif iw<0:
+            g_nu = g[abs(iw):-abs(iw)]
+            g_nu_omega = g[:-2*abs(iw)]
+        else:
+            g_nu = g
+            g_nu_omega = g
+        chi0 = -beta*g_nu*g_nu_omega
+        nu_range = slice(chi0.shape[0]//2-nouter,chi0.shape[0]//2+nouter)
+        chi0_w[...,w_idx] = chi0[nu_range]
+    return chi0_w
+
+
+@jit(nopython=True)
+def gamma_w(beta, U, w0, g0, chi0_w, chi, n4iwf, n4iwb, nouter):
+    chi_d = chi[0,...] + chi[1,...]
+    chi_m = chi[0,...] - chi[1,...]
+    gamma_d = np.empty((2*n4iwf, 2*n4iwf, 2*n4iwb+1), dtype=np.complex128)
+    gamma_m = np.empty((2*n4iwf, 2*n4iwf, 2*n4iwb+1), dtype=np.complex128)
+    nu_mats = build_nu_mats(nouter, beta)
+    w_mats = build_w_mats(n4iwb, beta)
+    for w_idx, iw in enumerate(range(-n4iwb,n4iwb+1)):
+        Uw = Udyn(w_mats[w_idx], w0, g0, U)
+        Uw_array = np.ones((2*nouter, 2*nouter))*Uw
+        Unu = U_trans(nu_mats, nu_mats, w0, g0, U)
+        U_d = 2*Uw_array - Unu
+        U_m = -Unu
+        
+        chi_t_d = np.linalg.inv(np.diag(1/chi0_w[:,w_idx]) + U_d/beta**2)
+        chi_t_m = np.linalg.inv(np.diag(1/chi0_w[:,w_idx]) + U_m/beta**2)
+
+        nu_range = slice(nouter-n4iwf,nouter+n4iwf)
+
+        dgamma_d = beta**2*(np.linalg.inv(chi_d[:,:,w_idx]) - np.linalg.inv(chi_t_d[nu_range, nu_range]))
+        dgamma_m = beta**2*(np.linalg.inv(chi_m[:,:,w_idx]) - np.linalg.inv(chi_t_m[nu_range, nu_range]))
+
+        gamma_d[:,:,w_idx] = dgamma_d + U_d[nu_range, nu_range]
+        gamma_m[:,:,w_idx] = dgamma_m + U_m[nu_range, nu_range]
+
+    return gamma_d, gamma_m
+
+
+@jit(nopython=True)
+def bse_asymp(beta:float, u:np.float64, omega0:np.float64, g:np.float64, chi0_w_full:np.ndarray, chi0_w_q:np.ndarray, dgamma_d:np.ndarray, dgamma_m:np.ndarray, niwf:int, n4iwf:int, n4iwb:int, qpoints:np.ndarray):
+
+    chi_d_w_q  = np.empty((2*n4iwb+1, qpoints.shape[0]), dtype=np.complex128)
+    v_d_w_q    = np.empty((2*n4iwf, 2*n4iwb+1, qpoints.shape[0]), dtype=np.complex128)
+    A_d_w_q = np.empty((2*n4iwf, 2*n4iwb+1, qpoints.shape[0]), dtype=np.complex128)
+    
+    chi_m_w_q  = np.empty((2*n4iwb+1, qpoints.shape[0]), dtype=np.complex128)
+    v_m_w_q    = np.empty((2*n4iwf, 2*n4iwb+1, qpoints.shape[0]), dtype=np.complex128)
+    A_m_w_q = np.empty((2*n4iwf, 2*n4iwb+1, qpoints.shape[0]), dtype=np.complex128)
+    
+    numats = build_nu_mats(n4iwf,beta)
+    wmats  = build_w_mats(n4iwb,beta)
+
+    Uw = Udyn_arr(wmats,omega0,g,u).astype(np.complex128)
+    Ununup = U_trans(nu=numats,nup=numats, omega0=omega0, g=g, u=0).astype(np.complex128)
+
+    u_d = 2*Uw - u
+    u_m = -u
+
+    for q_idx, q in enumerate(qpoints):
+        for w_idx, iw in enumerate(range(-n4iwb, n4iwb+1)):
+            phi_d = np.linalg.inv(np.diag(1/chi0_w_q[:,w_idx,q_idx]) + (dgamma_d[:,:,w_idx]-u_d[w_idx]*np.ones((2*n4iwf,2*n4iwf), dtype=np.complex128))/beta**2)
+            phi_m = np.linalg.inv(np.diag(1/chi0_w_q[:,w_idx,q_idx]) + (dgamma_m[:,:,w_idx]-u_m*np.ones((2*n4iwf,2*n4iwf), dtype=np.complex128))/beta**2)
+
+            bub_sum = (np.sum(chi0_w_full[niwf+n4iwf:, w_idx]) + np.sum(chi0_w_full[:niwf-n4iwf, w_idx])) / beta**2
+
+            chi_d = 1/(1/(np.sum(phi_d)/beta**2 + bub_sum) + u_d[w_idx]) 
+            chi_m = 1/(1/(np.sum(phi_m)/beta**2 + bub_sum) + u_m)
+
+            v_d = np.sum(np.diag(1/chi0_w_q[:,w_idx,q_idx])@phi_d, axis=1) * (1-u_d[w_idx]*chi_d)/(1-u_d[w_idx]*(chi_d+asymp_chi(2*niwf, beta)))
+            v_m = np.sum(np.diag(1/chi0_w_q[:,w_idx,q_idx])@phi_m, axis=1) * (1-u_m*chi_m)/(1-u_m*(chi_m+asymp_chi(2*niwf, beta)))
+
+            one = np.ones((2*n4iwf,2*n4iwf), dtype=np.complex128)
+            phi_d = phi_d - phi_d@(u_d[w_idx]*one)@phi_d*(1-u_d[w_idx]*chi_d) + phi_d@(u_d[w_idx]*one)@phi_d*(1-u_d[w_idx]*chi_d)**2/(1-u_d[w_idx]*(chi_d+asymp_chi(2*niwf, beta)))
+            phi_m = phi_m - phi_m@(u_m*one)@phi_m*(1-u_m*chi_m) + phi_m@(u_m*one)@phi_m*(1-u_m*chi_m)**2/(1-u_m*(chi_m+asymp_chi(2*niwf, beta)))
+
+            # compute three-leg vertex A
+            A_d_q = (1/chi0_w_q[:,w_idx,q_idx])*np.diag(  phi_d @ Ununup )*beta
+            A_m_q = (1/chi0_w_q[:,w_idx,q_idx])*np.diag(  phi_m @ Ununup )*beta
+
+            chi_d_w_q[w_idx,q_idx] = chi_d + asymp_chi(2*niwf, beta)
+            v_d_w_q[:,w_idx,q_idx] = v_d
+            A_d_w_q[:,w_idx,q_idx] = A_d_q
+
+            chi_m_w_q[w_idx,q_idx] = chi_m + asymp_chi(2*niwf, beta)
+            v_m_w_q[:,w_idx,q_idx] = v_m
+            A_m_w_q[:,w_idx,q_idx] = A_m_q
+
+    return chi_d_w_q, v_d_w_q, A_d_w_q, chi_m_w_q, v_m_w_q, A_m_w_q

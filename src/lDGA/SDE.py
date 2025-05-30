@@ -1,5 +1,6 @@
 import numpy as np
 from lDGA.utilities import ik2k, k2ik, G_wq_given_nuk, Udyn_arr, G_w_given_nu, U_trans, Udyn, build_nu_mats, build_w_mats,Udyn_arr
+from lDGA.bse import asymp_chi
 from numba import jit
 from mpi4py import MPI
 
@@ -51,13 +52,16 @@ def Hubbard_Holstein_SDE(u:np.float64, g0:np.float64, omega0:np.float64, beta:np
 
     theta_nu_wq += -4.0*ununup[0,0] +2.0*np.reshape(uw,newshape=(1,len(uw),1)) # U terms
 
-    theta_nu_wq += -2*np.einsum('j,ijk->ijk',uw,gamma_d) + (A_d + 3*A_m)/beta # 34.1
+    theta_nu_wq += -2*np.einsum('j,ijk->ijk',uw,gamma_d) + u*(gamma_d + 3*gamma_m) + (A_d + 3*A_m)/beta # 34.1
 
     theta_nu_wq +=  np.einsum('ijk,j,jk,mjk,mjk->ijk',gamma_d, 2*uw, u_d*(1-u_d*chi_d_w_q), gamma_d, chi0_nu_w_q)/beta**2 # 34.2
+    theta_nu_wq +=  asymp_chi(2*n4iwf, beta) * np.einsum('ijk,j,jk->ijk',gamma_d, 2*uw, u_d*(1-u_d*chi_d_w_q))/beta**2 # 34.2
 
     theta_nu_wq -=  np.einsum('ijk,jk,im,mjk,mjk->ijk',gamma_d,u_d*(1-u_d*chi_d_w_q),ununup,gamma_d,chi0_nu_w_q)/beta**2 # 34.3
+    theta_nu_wq -=  u*asymp_chi(2*n4iwf, beta)*np.einsum('ijk,jk->ijk',gamma_d,u_d*(1-u_d*chi_d_w_q))/beta**2
 
     theta_nu_wq -= 3*np.einsum('ijk,jk,im,mjk,mjk->ijk',gamma_m,u_m*(1-u_m*chi_m_w_q),ununup,gamma_m,chi0_nu_w_q)/beta**2 # 34.4
+    theta_nu_wq -= u*asymp_chi(2*n4iwf, beta)*3*np.einsum('ijk,jk->ijk',gamma_m,u_m*(1-u_m*chi_m_w_q))/beta**2 # 34.4
 
     theta_nu_wq -= 2*np.einsum('j,imj,mjk->ijk',uw,F_d_loc,chi0_nu_w_q)/beta**2 #local part
 

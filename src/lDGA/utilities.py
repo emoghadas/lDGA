@@ -31,6 +31,31 @@ def wrap_k(k):
             k[i] -= 2 * np.pi
     return k
 
+@jit(nopython=True)
+def irr_q_grid(qpoints):
+    nq = len(qpoints)
+
+    q_grid = []
+    weights = []
+    for ix in range(1,nq+1):
+        a = 1
+        if (ix==1 or ix==nq):
+            a *= 0.5
+        for iy in range(1,ix+1):
+            b = a
+            if (iy==1 or iy==nq):
+                b *= 0.5
+            b *= 2//((iy)//(ix) + 1)
+            weights.append(b)
+            qx = qpoints[ix-1]
+            qy = qpoints[iy-1]
+            q_grid.append([qx, qy])
+
+    q_grid = np.array(q_grid)
+    weights = np.array(weights)
+
+    return q_grid, weights
+
 # Emin's more complicated fix
 #@jit(nopython=True)
 #def k2ik(k: np.ndarray, Nk: int) -> int:
@@ -137,6 +162,69 @@ def G_wq_given_nuk(nu:np.float64, k:np.ndarray, sigma:np.ndarray, n4iwb:int, qpo
                 Gres[iw+n4iwb,iq] = 1.0 / ( 1j*nu_plus_w + mu - eps_kq - sigma_dga[i_nuw+n4iwf,i_qk] )
             elif( (sigma_dga is None) or (i_nuw >= -niwf and i_nuw < niwf) ):
                 Gres[iw+n4iwb,iq] = 1.0 / ( 1j*nu_plus_w + mu - eps_kq - sigma[i_nuw+niwf] )
+    return Gres
+
+@jit(nopython=True)
+def generate_sym(q: np.ndarray) -> np.ndarray:
+    sym_ops = np.array([
+        [[1, 0], [0, 1]],
+        [[0, -1], [1, 0]],
+        [[-1, 0], [0, -1]],
+        [[0, 1], [-1, 0]],
+        [[1, 0], [0, -1]],
+        [[-1, 0], [0, 1]],
+        [[0, 1], [1, 0]],
+        [[0, -1], [-1, 0]],
+    ], dtype=np.float64) 
+
+    q_sym = np.empty((8, 2), dtype=np.float64)
+
+    for i in range(8):
+        q_sym[i] = np.dot(sym_ops[i], q)
+
+    return q_sym
+
+
+@jit(nopython=True)
+def G_wq_given_nuk_irr(nu:np.float64, k:np.ndarray, sigma:np.ndarray, n4iwb:int, qpoints:np.ndarray, beta:np.float64, mu:np.float64, sigma_dga:np.ndarray=None,ts=None )-> np.ndarray:
+    dim = len(k); inu=nu2inu(nu, beta)
+    Nq, dimq = qpoints.shape
+    Gres = np.zeros( (2*n4iwb+1,Nq,8), dtype=np.complex128 )
+    niwf = sigma.shape[0]//2
+    n4iwf = 0
+    if(ts is None):
+        t1=1.0; t2=0.0
+    else:
+        t1=ts[0]; t2=ts[1]
+
+    if(not(sigma_dga is None)):
+        Nk = sigma_dga.shape[1]
+        Nk_lin = int(np.round(Nk**(1/dim)))
+        n4iwf = sigma_dga.shape[0]//2
+    for iq,q in enumerate(qpoints):
+        qx = q[0]
+        qy = q[1]
+        weight=1.
+        if qx==0 or qx==np.pi:
+            weight *= 0.5
+        if qy==0 or qy==np.pi:
+            weight *= 0.5
+        if np.abs(qx-qy)<1e-8:
+            weight *= 0.5
+
+        all_qs = generate_sym(q)
+        for iq_sym,q_sym in enumerate(all_qs):
+            eps_kq = np.complex128(ek_2d(k+q_sym, t=t1,tpr=t2))
+
+            for iw in range(-n4iwb,1+n4iwb):
+                nu_plus_w = nu+np.pi*(2.0*iw)/beta
+                i_nuw = nu2inu(nu_plus_w, beta) #Here if nu+w is beyond our sigma we may want to implement a "tail" version of sigma
+                if( not(sigma_dga is None) and (i_nuw >= -n4iwf and i_nuw < n4iwf)): 
+                    kq = wrap_k(k+q_sym)
+                    i_qk = k2ik(kq,Nk_lin)
+                    Gres[iw+n4iwb,iq,iq_sym] = weight / ( 1j*nu_plus_w + mu - eps_kq - sigma_dga[i_nuw+n4iwf,i_qk] )
+                elif( (sigma_dga is None) or (i_nuw >= -niwf and i_nuw < niwf) ):
+                    Gres[iw+n4iwb,iq,iq_sym] = weight / ( 1j*nu_plus_w + mu - eps_kq - sigma[i_nuw+niwf] )
     return Gres
 
 

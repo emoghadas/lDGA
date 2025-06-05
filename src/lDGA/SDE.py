@@ -1,5 +1,5 @@
 import numpy as np
-from lDGA.utilities import ik2k, k2ik, G_wq_given_nuk, Udyn_arr, G_w_given_nu, U_trans, Udyn, build_nu_mats, build_w_mats,Udyn_arr
+from lDGA.utilities import ik2k, k2ik, G_wq_given_nuk, G_wq_given_nuk_irr, Udyn_arr, G_w_given_nu, U_trans, Udyn, build_nu_mats, build_w_mats,Udyn_arr
 from numba import jit
 from mpi4py import MPI
 
@@ -70,7 +70,7 @@ def Hubbard_Holstein_SDE(u:np.float64, g0:np.float64, omega0:np.float64, beta:np
 
     #Here also Fock term
     #N.B. now working only for a local self-energy, for SC-DGA to be corrected for a k-dependent one
-    self_energy = self_sum_Uw(self_old, g_old, theta_nu_wq, omega0, g0, beta, qpoints, Nk, Nqtot, dim, mu, mpi_rank,self_dga)
+    self_energy = self_sum_Uw_irr(self_old, g_old, theta_nu_wq, omega0, g0, beta, qpoints, Nk, Nqtot, dim, mu, mpi_rank,self_dga)
     #Hartree term
 
 
@@ -79,7 +79,6 @@ def Hubbard_Holstein_SDE(u:np.float64, g0:np.float64, omega0:np.float64, beta:np
         self_energy += (dens*( u - (4.0*g0**2/omega0) ) + g0**2/omega0)
 
     return self_energy # Swinger-Dyson for the Hubbard-Holstein model
-
 
 #internal auxiliary routine
 @jit(nopython=True)
@@ -101,6 +100,30 @@ def self_sum_Uw(self_old:np.ndarray, g_old:np.ndarray, theta:np.ndarray,  omega0
             for inup in range(-niwf,niwf):
                 nup=(np.pi/beta)*(2*inup+1)
                 self_en[inu+n4iwf,:] -= g_old[inup+niwf]*Udyn(nu-nup,omega0,g0,u=0.0)*np.exp(1j*nup*1e-10)/beta
+    return self_en
+
+
+#internal auxiliary routine
+@jit(nopython=True)
+def self_sum_Uw_irr(self_old:np.ndarray, g_old:np.ndarray, theta:np.ndarray,  omega0:np.float64, g0:np.float64, beta:np.float64, qpoints:np.ndarray,  Nk:int,  Nqtot:int, dim:int , mu:np.float64, mpi_rank:int, self_dga:np.ndarray=None) -> np.ndarray:
+    n4iwf,n4iwb,Nqloc = theta.shape
+    n4iwf//=2; n4iwb=n4iwb//2
+    niwf = g_old.shape[0] //2
+
+    self_en = np.zeros((2*n4iwf,Nk), dtype=np.complex128)
+
+    for i_sym in range(8):
+        for inu in range(-n4iwf,n4iwf):
+            nu=(np.pi/beta)*(2*inu+1)
+            for ik in range(Nk):
+                k = ik2k(ik,dim,Nk)
+                self_en[inu+n4iwf,ik] +=(0.5/beta)*np.sum( theta[inu+n4iwf,:,:] * G_wq_given_nuk_irr(nu,k,self_old,n4iwb,qpoints,beta,mu,self_dga)[:,:,i_sym])/Nqtot #vertex term
+                if( (g0!=0.0) and (not self_dga is None) ):
+                    self_en[inu+n4iwf,ik] -= np.sum(G_wq_given_nuk_irr(nu,k,self_old,n4iwb,qpoints,beta,mu,self_dga)[:,:,i_sym]*Udyn_arr(build_w_mats(n4iwb,beta),omega0,g0).reshape(2*n4iwb+1,1))/beta/Nqtot
+            if( (g0!=0.0 and mpi_rank==0) and ( self_dga is None) ):
+                for inup in range(-niwf,niwf):
+                    nup=(np.pi/beta)*(2*inup+1)
+                    self_en[inu+n4iwf,:] -= g_old[inup+niwf]*Udyn(nu-nup,omega0,g0,u=0.0)*np.exp(1j*nup*1e-10)/beta/8
     return self_en
 
 #internal auxiliary routine

@@ -4,11 +4,11 @@ from numba import jit
 import lDGA.utilities as util
 
 
-def lambda_correction(lambda_type:str, beta:np.float64, chi_d_latt:np.ndarray, chi_m_latt:np.ndarray,chi_d_loc:np.ndarray,chi_m_loc:np.ndarray):
+def lambda_correction(lambda_type:str, beta:np.float64, chi_d_latt:np.ndarray, chi_m_latt:np.ndarray,chi_d_loc:np.ndarray,chi_m_loc:np.ndarray, weights:np.ndarray):
     
     match lambda_type:
         case "Pauli":
-            lambda_m = get_lambda_m_pauli( beta, chi_d_latt, chi_m_latt,chi_d_loc, chi_m_loc )
+            lambda_m = get_lambda_m_pauli( beta, chi_d_latt, chi_m_latt,chi_d_loc, chi_m_loc, weights)
             lambda_d = 0.0
         case "Uniform":
             lambda_m = get_lambda_uniform(beta, chi_m_latt, chi_m_loc)
@@ -26,15 +26,16 @@ def lambda_correction(lambda_type:str, beta:np.float64, chi_d_latt:np.ndarray, c
 #PAULI PRINCIPLE
 # sum_wq chi^L_up,up = sum_wq ( chi_d + chi^L_m) = (n/2-1)*(n/2)
 @jit(nopython=True)
-def root_pauli( lambda_m:np.float64, beta:np.float64, chi_d_latt:np.ndarray, chi_m_latt:np.ndarray, chi_d_loc:np.ndarray, chi_m_loc:np.ndarray, lambda_maxpole:np.float64)->np.float64:
+def root_pauli( lambda_m:np.float64, beta:np.float64, chi_d_latt:np.ndarray, chi_m_latt:np.ndarray, chi_d_loc:np.ndarray, chi_m_loc:np.ndarray, lambda_maxpole:np.float64, weights:np.ndarray)->np.float64:
     n4iwb = chi_d_latt.shape[0]//2;  Nq = chi_m_latt.shape[1]
     latt_sum = 0.5*( np.sum( np.sum(chi_d_latt,axis=1)/Nq + np.sum( chi_m_latt/(1.0+(lambda_maxpole+np.exp(lambda_m))*chi_m_latt),axis=1)/Nq ) ).real/beta
+    latt_sum = 0.5*( np.sum( chi_d_latt@weights/np.sum(weights) + (chi_m_latt/(1.0+(lambda_maxpole+np.exp(lambda_m))*chi_m_latt))@weights/np.sum(weights) ) ).real/beta
     return 0.5*np.sum(chi_d_loc+chi_m_loc).real/beta  - latt_sum
 
-def get_lambda_m_pauli( beta:np.float64, chi_d_latt:np.ndarray, chi_m_latt:np.ndarray, chi_d_loc:np.ndarray, chi_m_loc:np.ndarray):
+def get_lambda_m_pauli( beta:np.float64, chi_d_latt:np.ndarray, chi_m_latt:np.ndarray, chi_d_loc:np.ndarray, chi_m_loc:np.ndarray, weights:np.ndarray):
     n4iwb = chi_m_latt.shape[0]//2
     lambda_maxpole = -np.min(1/chi_m_latt[n4iwb,:].real)
-    root_sol = root(root_pauli,args=(beta,chi_d_latt,chi_m_latt,chi_d_loc,chi_m_loc,lambda_maxpole),x0=np.log(0.2),method="lm",tol=1e-8)
+    root_sol = root(root_pauli,args=(beta,chi_d_latt,chi_m_latt,chi_d_loc,chi_m_loc,lambda_maxpole,weights),x0=np.log(0.2),method="lm",tol=1e-8)
     lambda_sol = lambda_maxpole+np.exp(root_sol.x)
     if(root_sol.success):
         print("After ",root_sol.nfev," function evaluations, the root is found to be ",lambda_sol)

@@ -52,9 +52,10 @@ def irr_q_grid(qpoints):
             q_grid.append([qx, qy])
 
     q_grid = np.array(q_grid)
-    weights = np.array(weights)
+    weights = np.array(weights, dtype=np.complex128)
 
     return q_grid, weights
+
 
 # Emin's more complicated fix
 #@jit(nopython=True)

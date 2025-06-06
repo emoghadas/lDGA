@@ -8,8 +8,8 @@ class DGA_Config:
     """
     hdf5_file: str  # Path to the DMFT HDF5 results file
     kdim: int = 2 # dimensionality of lattice
-    nk: int = 12 # Number of k-points
-    nq: int = 12 # Number of q-points
+    nk: int = 8 # Number of k-points
+    nq: int = 8 # Number of q-points
     niwf = 1000  # Number of positive fermionic frequencies for 1p-GF
     n4iwf: int = 100  # Number of positive fermionic frequencies for 2p-GF
     n4iwb: int = 100  # Number of positive bosonic frequencies for 2p-GF

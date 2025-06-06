@@ -48,13 +48,13 @@ kdim = dga_cfg.kdim
 #nk = dga_cfg.nk
 #nq = dga_cfg.nq
 # test irr BZ
-nq = 4
+nq = 3
 n_qpoints = int(nq*(nq+1)/2)
 nk = 2*nq-2
 max_iter = dga_cfg.max_iter
 w0 = dga_cfg.w0
 g0 = dga_cfg.g0
-lambda_type = "None" #dga_cfg.lambda_type
+lambda_type = dga_cfg.lambda_type
 file_name = dga_cfg.file_name
 now_obj = datetime.now()
 now = now_obj.strftime("%Y-%m-%d_%H:%M:%S")
@@ -160,7 +160,7 @@ if rank==0:
     chi_d_loc = np.sum(chi_d_loc, axis=(0,1))/beta**2 + bse.asymp_chi(2*n4iwf, beta) #Tails correction are important to have Re[chi_loc]>0
     chi_m_loc = chi[0,...]-chi[1,...]
     chi_m_loc = np.sum(chi_m_loc, axis=(0,1))/beta**2 + bse.asymp_chi(2*n4iwf, beta) #Tails correction are important to have Re[chi_loc]>0
-    lambda_d0, lambda_m0 = lamb.lambda_correction(lambda_type,beta,chi_d_latt,chi_m_latt,chi_d_loc,chi_m_loc)
+    lambda_d0, lambda_m0 = lamb.lambda_correction(lambda_type,beta,chi_d_latt,chi_m_latt,chi_d_loc,chi_m_loc, weights)
     lambda_d[:,0] = lambda_d0
     lambda_m[:,0] = lambda_m0
 

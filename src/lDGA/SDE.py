@@ -83,7 +83,7 @@ def Hubbard_Holstein_SDE(u:np.float64, g0:np.float64, omega0:np.float64, beta:np
 
 #internal auxiliary routine
 @jit(nopython=True)
-def self_sum_Uw(self_old:np.ndarray, g_old:np.ndarray, theta:np.ndarray,  omega0:np.float64, g0:np.float64, beta:np.float64, qpoints:np.ndarray,  Nk:int,  Nqtot:int, dim:int , mu:np.float64, mpi_rank:int, self_dga:np.ndarray=None) -> np.ndarray:
+def self_sum_Uw(self_old:np.ndarray, g_old:np.ndarray, theta:np.ndarray,  omega0:np.float64, g0:np.float64, beta:np.float64, qpoints:np.ndarray,  Nk:int,  Nqtot:int, dim:int , mu:np.float64, mpi_rank:int, self_dga:np.ndarray=None,ts:np.ndarray=None) -> np.ndarray:
     n4iwf,n4iwb,Nqloc = theta.shape
     n4iwf//=2; n4iwb=n4iwb//2
     niwf = g_old.shape[0] //2
@@ -94,9 +94,9 @@ def self_sum_Uw(self_old:np.ndarray, g_old:np.ndarray, theta:np.ndarray,  omega0
         nu=(np.pi/beta)*(2*inu+1)
         for ik in range(Nk):
             k = ik2k(ik,dim,Nk)
-            self_en[inu+n4iwf,ik] +=(0.5/beta)*np.sum( theta[inu+n4iwf,:,:] * G_wq_given_nuk(nu,k,self_old,n4iwb,qpoints,beta,mu,self_dga))/Nqtot #vertex term
+            self_en[inu+n4iwf,ik] +=(0.5/beta)*np.sum( theta[inu+n4iwf,:,:] * G_wq_given_nuk(nu,k,self_old,n4iwb,qpoints,beta,mu,self_dga,ts=ts))/Nqtot #vertex term
             if( (g0!=0.0) and (not self_dga is None) ):
-                self_en[inu+n4iwf,ik] -= np.sum(G_wq_given_nuk(nu,k,self_old,n4iwb,qpoints,beta,mu,self_dga)*Udyn_arr(build_w_mats(n4iwb,beta),omega0,g0).reshape(2*n4iwb+1,1))/beta/Nqtot
+                self_en[inu+n4iwf,ik] -= np.sum(G_wq_given_nuk(nu,k,self_old,n4iwb,qpoints,beta,mu,self_dga,ts=ts)*Udyn_arr(build_w_mats(n4iwb,beta),omega0,g0).reshape(2*n4iwb+1,1))/beta/Nqtot
         if( (g0!=0.0 and mpi_rank==0) and ( self_dga is None) ):
             for inup in range(-niwf,niwf):
                 nup=(np.pi/beta)*(2*inup+1)
@@ -113,7 +113,7 @@ def self_sum_U(self_old:np.array, theta:np.ndarray, U:np.float64, beta:np.float6
         nu=(np.pi/beta)*(2*inu+1)
         for ik in range(Nk):
             k = ik2k(ik,dim,Nk)
-            self_en[inu,ik] = -(0.5/beta**2)*np.sum( (U*theta[inu,:,:]) * G_wq_given_nuk(nu,k,self_old,n4iwb,qpoints,beta,mu,self_dga)  ) #vertex term
+            self_en[inu,ik] = -(0.5/beta**2)*np.sum( (U*theta[inu,:,:]) * G_wq_given_nuk(nu,k,self_old,n4iwb,qpoints,beta,mu,self_dga,ts=ts)  ) #vertex term
     return self_en/Nqtot
 
 
@@ -124,7 +124,7 @@ def self_sum_U(self_old:np.array, theta:np.ndarray, U:np.float64, beta:np.float6
 ###################################### ONLY FOR LOCAL TESTS PURPOSES ###########################################
 #
 # Local Swinger-Dyson for the Hubbard-Holstein model
-def Hubbard_Holstein_SDE_loc(u:np.float64, g0:np.float64, omega0:np.float64, beta:np.float64, gamma_d:np.ndarray, gamma_m:np.ndarray,  gammaR_d:np.ndarray, gammaR_m:np.ndarray,  A_d:np.ndarray, A_m:np.ndarray, chi_d_w:np.ndarray, chi_m_w:np.ndarray, F_d_loc:np.ndarray, F_m_loc:np.ndarray, chi0_nu_w:np.ndarray, g_old:np.ndarray, dens:np.float64, mu:np.float64):
+def Hubbard_Holstein_SDE_loc(u:np.float64, g0:np.float64, omega0:np.float64, beta:np.float64, gamma_d:np.ndarray, gamma_m:np.ndarray,  A_d:np.ndarray, A_m:np.ndarray, chi_d_w:np.ndarray, chi_m_w:np.ndarray, F_d_loc:np.ndarray, F_m_loc:np.ndarray, chi0_nu_w:np.ndarray, g_old:np.ndarray, dens:np.float64, mu:np.float64):
     n4iwf = F_d_loc.shape[0]//2
     n4iwb = chi_d_w.shape[0]//2
     self_energy = np.zeros( (2*n4iwf), dtype=np.complex128)
@@ -144,11 +144,11 @@ def Hubbard_Holstein_SDE_loc(u:np.float64, g0:np.float64, omega0:np.float64, bet
 
     theta_nu_w += -2*np.einsum('j,ij->ij', uw, gamma_d) + (A_d + 3*A_m)/beta # 34.1
 
-    theta_nu_w +=  np.einsum('ij,j,mj,mj->ij', gamma_d, 2*uw*u_d*(1-u_d*chi_d_w), gammaR_d, chi0_nu_w)/beta**2 # 34.2
+    theta_nu_w +=  np.einsum('ij,j,mj,mj->ij', gamma_d, 2*uw*u_d*(1-u_d*chi_d_w), gamma_d, chi0_nu_w)/beta**2 # 34.2
 
-    theta_nu_w -=  np.einsum('ij,j,im,mj,mj->ij', gamma_d, u_d*(1-u_d*chi_d_w), ununup, gammaR_d, chi0_nu_w)/beta**2 # 34.3
+    theta_nu_w -=  np.einsum('ij,j,im,mj,mj->ij', gamma_d, u_d*(1-u_d*chi_d_w), ununup, gamma_d, chi0_nu_w)/beta**2 # 34.3
 
-    theta_nu_w -= 3*np.einsum('ij,j,im,mj,mj->ij', gamma_m, u_m*(1-u_m*chi_m_w), ununup, gammaR_m, chi0_nu_w)/beta**2 # 34.4
+    theta_nu_w -= 3*np.einsum('ij,j,im,mj,mj->ij', gamma_m, u_m*(1-u_m*chi_m_w), ununup, gamma_m, chi0_nu_w)/beta**2 # 34.4
 
     theta_nu_w -= 2*np.einsum('j,ikj,kj->ij', uw, F_d_loc, chi0_nu_w)/beta**2 #local part
 

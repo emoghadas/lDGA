@@ -190,14 +190,17 @@ def gamma_w(beta, U, w0, g0, chi0_w, chi, n4iwf, n4iwb, nouter):
         dgamma_d = beta**2*(np.linalg.inv(chi_d[:,:,w_idx]) - np.linalg.inv(chi_t_d[nu_range, nu_range]))
         dgamma_m = beta**2*(np.linalg.inv(chi_m[:,:,w_idx]) - np.linalg.inv(chi_t_m[nu_range, nu_range]))
 
-        gamma_d[:,:,w_idx] = dgamma_d + U_d[nu_range, nu_range]
         gamma_m[:,:,w_idx] = dgamma_m + U_m[nu_range, nu_range]
+        gamma_d[:,:,w_idx] = dgamma_d + U_d[nu_range, nu_range]
 
     return gamma_d, gamma_m
 
 
-@jit(nopython=True)
-def bse_asymp(beta:float, u:np.float64, omega0:np.float64, g:np.float64, chi0_w_full:np.ndarray, chi0_w_q:np.ndarray, dgamma_d:np.ndarray, dgamma_m:np.ndarray, niwf:int, n4iwf:int, n4iwb:int, qpoints:np.ndarray):
+#@jit(nopython=True)
+def bse_asymp(beta:float, u:np.float64, omega0:np.float64, g:np.float64, chi0_w_full:np.ndarray, chi0_w_q:np.ndarray, chi:np.ndarray, dgamma_d:np.ndarray, dgamma_m:np.ndarray, niwf:int, n4iwf:int, n4iwb:int, qpoints:np.ndarray):
+    chi_d_gen = chi[0,...] + chi[1,...]
+    chi_m_gen = chi[0,...] - chi[1,...]
+
 
     chi_d_w_q  = np.empty((2*n4iwb+1, qpoints.shape[0]), dtype=np.complex128)
     v_d_w_q    = np.empty((2*n4iwf, 2*n4iwb+1, qpoints.shape[0]), dtype=np.complex128)
@@ -211,7 +214,7 @@ def bse_asymp(beta:float, u:np.float64, omega0:np.float64, g:np.float64, chi0_w_
     wmats  = build_w_mats(n4iwb,beta)
 
     Uw = Udyn_arr(wmats,omega0,g,u).astype(np.complex128)
-    Ununup = U_trans(nu=numats,nup=numats, omega0=omega0, g=g, u=0).astype(np.complex128)
+    Ununup = U_trans(nu=numats,nup=numats, omega0=omega0, g=g, u=u).astype(np.complex128)
 
     u_d = 2*Uw - u
     u_m = -u
@@ -228,20 +231,30 @@ def bse_asymp(beta:float, u:np.float64, omega0:np.float64, g:np.float64, chi0_w_
 
             v_d = np.sum(np.diag(1/chi0_w_q[:,w_idx,q_idx])@phi_d, axis=1) * (1-u_d[w_idx]*chi_d)/(1-u_d[w_idx]*(chi_d+asymp_chi(2*niwf, beta)))
             v_m = np.sum(np.diag(1/chi0_w_q[:,w_idx,q_idx])@phi_m, axis=1) * (1-u_m*chi_m)/(1-u_m*(chi_m+asymp_chi(2*niwf, beta)))
+            #v_d = np.sum(np.diag(1/chi0_w_q[:,w_idx,q_idx])@chi_d_gen[...,w_idx], axis=1) /(1-u_d[w_idx]*(chi_d+asymp_chi(2*niwf, beta)))
+            #v_m = np.sum(np.diag(1/chi0_w_q[:,w_idx,q_idx])@chi_m_gen[...,w_idx], axis=1) /(1-u_m*(chi_m+asymp_chi(2*niwf, beta)))
 
+            
             one = np.ones((2*n4iwf,2*n4iwf), dtype=np.complex128)
-            phi_d = phi_d - phi_d@(u_d[w_idx]*one)@phi_d*(1-u_d[w_idx]*chi_d) + phi_d@(u_d[w_idx]*one)@phi_d*(1-u_d[w_idx]*chi_d)**2/(1-u_d[w_idx]*(chi_d+asymp_chi(2*niwf, beta)))
-            phi_m = phi_m - phi_m@(u_m*one)@phi_m*(1-u_m*chi_m) + phi_m@(u_m*one)@phi_m*(1-u_m*chi_m)**2/(1-u_m*(chi_m+asymp_chi(2*niwf, beta)))
+            phi_d = phi_d - phi_d@(u_d[w_idx]*one)@phi_d*(1-u_d[w_idx]*chi_d)/beta**2 + phi_d@(u_d[w_idx]*one)@phi_d*(1-u_d[w_idx]*chi_d)**2/(1-u_d[w_idx]*(chi_d+asymp_chi(2*niwf, beta)))/beta**2
+            phi_m = phi_m - phi_m@(u_m*one)@phi_m*(1-u_m*chi_m)/beta**2 + phi_m@(u_m*one)@phi_m*(1-u_m*chi_m)**2/(1-u_m*(chi_m+asymp_chi(2*niwf, beta)))/beta**2
+
+            #compute phi
+            chi_d += asymp_chi(2*niwf, beta)
+            chi_m += asymp_chi(2*niwf, beta)
+
+            #phi_d = chi_d_gen[...,w_idx] + np.outer(chi0_w_q[:,w_idx,q_idx]*v_d, chi0_w_q[:,w_idx,q_idx]*v_d)*u_d[w_idx]*(1-u_d[w_idx]*chi_d)/beta**2
+            #phi_m = chi_m_gen[...,w_idx] + np.outer(chi0_w_q[:,w_idx,q_idx]*v_m, chi0_w_q[:,w_idx,q_idx]*v_m)*u_m*(1-u_m*chi_m)/beta**2
 
             # compute three-leg vertex A
             A_d_q = (1/chi0_w_q[:,w_idx,q_idx])*np.diag(  phi_d @ Ununup )*beta
             A_m_q = (1/chi0_w_q[:,w_idx,q_idx])*np.diag(  phi_m @ Ununup )*beta
 
-            chi_d_w_q[w_idx,q_idx] = chi_d + asymp_chi(2*niwf, beta)
+            chi_d_w_q[w_idx,q_idx] = chi_d
             v_d_w_q[:,w_idx,q_idx] = v_d
             A_d_w_q[:,w_idx,q_idx] = A_d_q
 
-            chi_m_w_q[w_idx,q_idx] = chi_m + asymp_chi(2*niwf, beta)
+            chi_m_w_q[w_idx,q_idx] = chi_m 
             v_m_w_q[:,w_idx,q_idx] = v_m
             A_m_w_q[:,w_idx,q_idx] = A_m_q
 

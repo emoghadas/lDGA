@@ -141,18 +141,38 @@ def Hubbard_Holstein_SDE_loc(u:np.float64, g0:np.float64, omega0:np.float64, bet
     u_d = 2*uw-u
     u_m = -u
 
+
+
+
+    '''  theta_nu_wq += -2*np.einsum('j,ijk->ijk',uw,gamma_d) + u*(gamma_d + 3*gamma_m) + (A_d + 3*A_m)/beta # 34.1
+
+    theta_nu_wq +=  np.einsum('ijk,j,jk,mjk,mjk->ijk',gamma_d, 2*uw, u_d*(1-u_d*chi_d_w_q), gamma_d, chi0_nu_w_q)/beta**2 # 34.2
+    theta_nu_wq +=  asymp_chi(2*n4iwf, beta) * np.einsum('ijk,j,jk->ijk',gamma_d, 2*uw, u_d*(1-u_d*chi_d_w_q))/beta**2 # 34.2
+
+    theta_nu_wq -=  np.einsum('ijk,jk,im,mjk,mjk->ijk',gamma_d,u_d*(1-u_d*chi_d_w_q),ununup,gamma_d,chi0_nu_w_q)/beta**2 # 34.3
+    theta_nu_wq -=  u*asymp_chi(2*n4iwf, beta)*np.einsum('ijk,jk->ijk',gamma_d,u_d*(1-u_d*chi_d_w_q))/beta**2
+
+    theta_nu_wq -= 3*np.einsum('ijk,jk,im,mjk,mjk->ijk',gamma_m,u_m*(1-u_m*chi_m_w_q),ununup,gamma_m,chi0_nu_w_q)/beta**2 # 34.4
+    theta_nu_wq -= u*asymp_chi(2*n4iwf, beta)*3*np.einsum('ijk,jk->ijk',gamma_m,u_m*(1-u_m*chi_m_w_q))/beta**2 # 34.4'''
+
+
+
+
     #USING OUR FORMULA
     theta_nu_w = np.zeros( (2*n4iwf,2*n4iwb+1), dtype=np.complex128)
 
     theta_nu_w += -4.0*ununup[0,0] + 2.0*np.reshape(uw,newshape=(1,len(uw))) # U terms
 
-    theta_nu_w += -2*np.einsum('j,ij->ij', uw, gamma_d) + (A_d + 3*A_m)/beta # 34.1
+    theta_nu_w += -2*np.einsum('j,ij->ij', uw, gamma_d) + (A_d + 3*A_m)/beta #+ u*(gamma_d + 3*gamma_m) # 34.1
 
     theta_nu_w +=  np.einsum('ij,j,mj,mj->ij', gamma_d, 2*uw*u_d*(1-u_d*chi_d_w), gammaR_d, chi0_nu_w)/beta**2 # 34.2
+    #theta_nu_w +=  asymp_chi(2*n4iwf, beta) * np.einsum('ij,j->ij', gamma_d, 2*uw*u_d*(1-u_d*chi_d_w))/beta**2 # 34.2
 
     theta_nu_w -=  np.einsum('ij,j,im,mj,mj->ij', gamma_d, u_d*(1-u_d*chi_d_w), ununup, gammaR_d, chi0_nu_w)/beta**2 # 34.3
+    #theta_nu_w -=  u*asymp_chi(2*n4iwf, beta) * np.einsum('ij,j->ij', gamma_d, u_d*(1-u_d*chi_d_w))/beta**2 # 34.3
 
     theta_nu_w -= 3*np.einsum('ij,j,im,mj,mj->ij', gamma_m, u_m*(1-u_m*chi_m_w), ununup, gammaR_m, chi0_nu_w)/beta**2 # 34.4
+    #theta_nu_w -= u*asymp_chi(2*n4iwf, beta) * np.einsum('ij,j->ij', gamma_m, u_m*(1-u_m*chi_m_w))/beta**2 # 34.4
 
     theta_nu_w -= 2*np.einsum('j,ikj,kj->ij', uw, F_d_loc, chi0_nu_w)/beta**2 #local part
 

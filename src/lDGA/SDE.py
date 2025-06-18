@@ -93,7 +93,7 @@ def self_sum_Uw(self_old:np.ndarray, g_old:np.ndarray, theta:np.ndarray,  omega0
     for inu in range(-n4iwf,n4iwf):
         nu=(np.pi/beta)*(2*inu+1)
         for ik in range(Nk):
-            k = ik2k(ik,dim,Nk)
+            k = ik2k(ik,dim,int(Nk**(1/dim)))
             self_en[inu+n4iwf,ik] +=(0.5/beta)*np.sum( theta[inu+n4iwf,:,:] * G_wq_given_nuk(nu,k,self_old,n4iwb,qpoints,beta,mu,self_dga,ts=ts))/Nqtot #vertex term
             if( (g0!=0.0) and (not self_dga is None) ):
                 self_en[inu+n4iwf,ik] -= np.sum(G_wq_given_nuk(nu,k,self_old,n4iwb,qpoints,beta,mu,self_dga,ts=ts)*Udyn_arr(build_w_mats(n4iwb,beta),omega0,g0).reshape(2*n4iwb+1,1))/beta/Nqtot
@@ -105,14 +105,14 @@ def self_sum_Uw(self_old:np.ndarray, g_old:np.ndarray, theta:np.ndarray,  omega0
 
 #internal auxiliary routine
 @jit(nopython=True)
-def self_sum_U(self_old:np.array, theta:np.ndarray, U:np.float64, beta:np.float64, qpoints:np.ndarray, Nk:int,  Nqtot:int, dim:int, mu:np.float64, self_dga:np.ndarray=None) -> np.ndarray:
+def self_sum_U(self_old:np.array, theta:np.ndarray, U:np.float64, beta:np.float64, qpoints:np.ndarray, Nk:int,  Nqtot:int, dim:int, mu:np.float64, self_dga:np.ndarray=None, ts:np.ndarray=None) -> np.ndarray:
     n4iwf,n4iwb,Nqloc = theta.shape
     n4i2f//=2; n2iwb//=2;
     self_en = np.zeros( (2*n4iwf,Nk), dtype=np.complex128)
     for inu in range(-n4iwf,n4iwf):
         nu=(np.pi/beta)*(2*inu+1)
         for ik in range(Nk):
-            k = ik2k(ik,dim,Nk)
+            k = ik2k(ik,dim,int(Nk**(1/dim)))
             self_en[inu,ik] = -(0.5/beta**2)*np.sum( (U*theta[inu,:,:]) * G_wq_given_nuk(nu,k,self_old,n4iwb,qpoints,beta,mu,self_dga,ts=ts)  ) #vertex term
     return self_en/Nqtot
 

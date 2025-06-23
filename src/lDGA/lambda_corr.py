@@ -47,7 +47,7 @@ def get_lambda_m_pauli( beta:np.float64, chi_d_latt:np.ndarray, chi_m_latt:np.nd
 def root_function_uniform(lambda_r:np.float64, beta:np.float64, chi_r_latt:np.ndarray, chi_r_loc:np.ndarray, lambda_maxpole:np.float64) -> np.float64:
     # may want to assert dimensions of Chi_w_q and Chi_imp_w
     Nqs = chi_r_latt.shape[1]
-    return np.sum( chi_r_loc - np.sum( chi_r_latt/(1.0+lambda_r*chi_r_latt),axis=1)/Nqs  ).real/beta
+    return np.sum( chi_r_loc - np.sum( chi_r_latt/(1.0+(lambda_maxpole+np.exp(lambda_r))*chi_r_latt),axis=1)/Nqs  ).real/beta
 
 def get_lambda_uniform(beta:np.float64, chi_r_latt:np.ndarray, chi_r_loc:np.ndarray) -> np.float64:
     n4iwb = chi_r_latt.shape[0]//2
@@ -69,7 +69,7 @@ def root_function_wdep(lambda_r_w:np.float64, chi_r_latt:np.ndarray,chi_r_loc:np
     Chi_lambda_w = np.sum( chi_r_latt/(1.0+(lambda_w_mp+np.exp(lambda_r_w))*chi_r_latt))/np.float64(Nqs)
     return (chi_r_loc - Chi_lambda_w)
 
-def get_lambda_wdep(chi_r_latt:np.ndarray, chi_r_loc:np.ndarray, beta:np.float64) -> np.ndarray:
+def get_lambda_wdep(beta:np.float64, chi_r_latt:np.ndarray, chi_r_loc:np.ndarray) -> np.ndarray:
     print("Finding the w-dependent lambda_r")
     n4iwb = chi_r_latt.shape[0]//2
     lambda_w_mp = -np.min(1.0/chi_r_latt[n4iwb,:].real)

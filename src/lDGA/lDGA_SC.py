@@ -220,6 +220,18 @@ for iter in range(1,max_iter):
 
     chi_d_w_q, v_d_w_q, A_d, chi_m_w_q, v_m_w_q ,A_m = bse.chi_v_r_w_q(beta, u, w0, g0, chi0_w, chi0_w_q, chi, n4iwf, n4iwb, q_grid_loc)
 
+    # store new chis in chi_r_latt
+    chi_d_q_full = np.zeros([2*n4iwb+1, n_qpoints], dtype=np.complex128)
+    chi_d_q_full[:,q_range] = chi_d_w_q
+    chi_m_q_full = np.zeros([2*n4iwb+1, n_qpoints], dtype=np.complex128)
+    chi_m_q_full[:,q_range] = chi_m_w_q
+
+    chi_d_latt = np.zeros_like(chi_d_q_full) if rank==0 else None
+    chi_m_latt = np.zeros_like(chi_d_q_full) if rank==0 else None
+
+    comm.Reduce(chi_d_q_full, chi_d_latt, op=MPI.SUM, root=0)
+    comm.Reduce(chi_m_q_full, chi_m_latt, op=MPI.SUM, root=0)
+
     #TODO: LAMBDA DECAY PROCEDURE
     lambda_d *= np.exp(-iter)
     lambda_m *= np.exp(-iter)
@@ -248,8 +260,6 @@ for iter in range(1,max_iter):
         if error_sigma < 1e-3 :
             convg=True
     convg = comm.bcast(convg, root=0)
-    
-    #TODO SAVE STUFF
 
 
     if(rank==0):
@@ -266,5 +276,7 @@ for iter in range(1,max_iter):
     
 if(rank==0):
     fsave.close()
-    print("After exiting convg=",convg)
-    print("error_sigma:",error_sigma)
+    if max_iter>1:
+        print("After exiting convg=",convg)
+        print("error_sigma:",error_sigma)
+    print("Finished calculation")

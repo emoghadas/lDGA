@@ -45,12 +45,13 @@ niwf = dga_cfg.niwf
 n4iwf = dga_cfg.n4iwf
 n4iwb = dga_cfg.n4iwb
 kdim = dga_cfg.kdim
-#nk = dga_cfg.nk
-#nq = dga_cfg.nq
-# test irr BZ
-nq = 3
-n_qpoints = int(nq*(nq+1)/2)
-nk = 2*nq-2
+irrbz = dga_cfg.irrbz
+nq = dga_cfg.nq
+if irrbz:
+    n_qpoints = int(nq*(nq+1)/2)
+    nk = 2*nq-2
+else:
+    nk = dga_cfg.nk
 max_iter = dga_cfg.max_iter
 w0 = dga_cfg.w0
 g0 = dga_cfg.g0
@@ -89,27 +90,28 @@ print(f"n={n} - mu={mu} - beta={beta}")
 print("**************************************")
 
 
-#n_qpoints = nk**kdim
-if n_qpoints%size!=0:
-    raise ValueError(f"Number of q-points ({n_qpoints}) has to be multiple of number of processors ({size})")
-nq_local = n_qpoints/size
-
-## q-grid
-#q = np.linspace(-np.pi,np.pi,nk,endpoint=False)
-#if kdim==2:
-#    q_grid = np.meshgrid(q,q)
-#    q_grid = np.array(q_grid).reshape(2,-1).T
-#elif kdim==3:
-#    q_grid = np.meshgrid(q,q,q)
-#    q_grid = np.array(q_grid).reshape(3,-1).T
-#else:
-#    raise ValueError("Number of dimension cannot exceed 3")
-
 q = np.linspace(0, np.pi, nq, endpoint=True)
-q_grid, weights = util.irr_q_grid(q)
+if irrbz:
+    if kdim!=2:
+        raise ValueError("Irreducible BZ summation only implemented for d=2")
+    q_grid, weights = util.irr_q_grid(q)
+else:
+    if kdim==2:
+        q_grid = np.meshgrid(q,q)
+        q_grid = np.array(q_grid).reshape(2,-1).T
+    elif kdim==3:
+        q_grid = np.meshgrid(q,q,q)
+        q_grid = np.array(q_grid).reshape(3,-1).T
+    else:
+        raise ValueError("Number of dimension cannot exceed 3")
+    weights = np.ones(q_grid.shape[0], dtype=np.complex128)
 
-# slice for each process
-q_range = slice(int(rank*nq_local), int((rank+1)*nq_local))
+# assign q points to each process
+nq_per_process = n_qpoints // size
+remainder = n_qpoints % size
+start_idx = rank * nq_per_process + min(rank, remainder)
+end_idx = start_idx + nq_per_process + (1 if rank < remainder else 0)
+q_range = slice(int(start_idx), int(end_idx))
 q_grid_loc = q_grid[q_range,:]
 
 print("Calculate local bubble - rank:",rank)
@@ -180,7 +182,7 @@ sys.stdout.flush()
 
 # sde for selfenergy
 F_d_loc, F_m_loc = bse.F_r_loc(beta, chi0_w, chi, n4iwf, n4iwb)
-sigma_dga_q = sde.Hubbard_Holstein_SDE(u, g0, w0, beta, v_d_w_q, v_m_w_q, A_d,A_m, chi_d_w_q, chi_m_w_q, F_d_loc, F_m_loc, chi0_w_q, s, g, n, q_grid_loc, n_kpoints, n_kpoints, mu, kdim)
+sigma_dga_q = sde.Hubbard_Holstein_SDE(u, g0, w0, beta, v_d_w_q, v_m_w_q, A_d,A_m, chi_d_w_q, chi_m_w_q, F_d_loc, F_m_loc, chi0_w_q, s, g, n, q_grid_loc, n_kpoints, n_kpoints, mu, irrbz, kdim)
 
 if(max_iter==1):
     sigma_dga = np.zeros_like(sigma_dga_q,dtype=np.complex128) if rank==0 else None
@@ -244,7 +246,7 @@ for iter in range(1,max_iter):
     chi_d_w_q = chi_d_w_q / (1.0 + lambda_d*chi_d_w_q)
     chi_m_w_q = chi_m_w_q / (1.0 + lambda_m*chi_m_w_q)
 
-    sigma_dga_q = sde.Hubbard_Holstein_SDE(u, g0, w0, beta, v_d_w_q, v_m_w_q, A_d,A_m, chi_d_w_q, chi_m_w_q, F_d_loc, F_m_loc, chi0_w_q, s, g, n, q_grid_loc, n_kpoints, n_kpoints, new_mu, kdim, sigma_dga)
+    sigma_dga_q = sde.Hubbard_Holstein_SDE(u, g0, w0, beta, v_d_w_q, v_m_w_q, A_d,A_m, chi_d_w_q, chi_m_w_q, F_d_loc, F_m_loc, chi0_w_q, s, g, n, q_grid_loc, n_kpoints, n_kpoints, new_mu, irrbz, kdim, sigma_dga)
 
     if(rank==0):
         old_mu=new_mu*1

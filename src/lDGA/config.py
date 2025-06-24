@@ -10,10 +10,11 @@ class DGA_Config:
     kdim: int = 2 # dimensionality of lattice
     nk: int = 8 # Number of k-points
     nq: int = 8 # Number of q-points
+    irrbz: bool = True
     niwf = 1000  # Number of positive fermionic frequencies for 1p-GF
     n4iwf: int = 100  # Number of positive fermionic frequencies for 2p-GF
     n4iwb: int = 100  # Number of positive bosonic frequencies for 2p-GF
-    max_iter: int = 10
+    max_iter: int = 1
     lambda_decay: int = 1
     use_mpi: bool = True  # Flag for MPI parallelization
     dmft_dict = {} 

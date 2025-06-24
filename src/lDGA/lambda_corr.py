@@ -8,7 +8,7 @@ def lambda_correction(lambda_type:str, beta:np.float64, chi_d_latt:np.ndarray, c
     
     match lambda_type:
         case "Pauli":
-            lambda_m = get_lambda_m_pauli( beta, chi_d_latt, chi_m_latt,chi_d_loc, chi_m_loc, weights)
+            lambda_m = get_lambda_m_pauli(beta, chi_d_latt, chi_m_latt,chi_d_loc, chi_m_loc, weights)
             lambda_d = 0.0
         case "Uniform":
             lambda_m = get_lambda_uniform(beta, chi_m_latt, chi_m_loc, weights)

@@ -56,34 +56,6 @@ def irr_q_grid(qpoints):
 
     return q_grid, weights
 
-
-# Emin's more complicated fix
-#@jit(nopython=True)
-#def k2ik(k: np.ndarray, Nk: int) -> int:
-#    dim = len(k)
-#    ik = 0
-#    for idim in range(dim):
-#        # Map from [-π, π) to [0, 1)
-#        frac = (k[idim] + np.pi) / (2.0 * np.pi)
-#
-#        # Clamp just inside [0, 1)
-#        if frac < 0.0:
-#            frac = 0.0
-#        elif frac >= 1.0:
-#            frac = 1.0 - 1e-12
-#
-#        # Use floor for robustness, with a small bias
-#        idx = int(np.floor(frac * Nk + 1e-8))
-#
-#        # Final clamp just in case
-#        if idx < 0:
-#            idx = 0
-#        elif idx >= Nk:
-#            idx = Nk - 1
-#
-#        ik += idx * Nk**idim
-#    return ik
-
 @jit(nopython=True)
 def ek_2d(k:np.ndarray, t:float=0.25, tpr:float=0, tsec:float=0) -> np.float64:
     '''

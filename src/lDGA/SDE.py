@@ -30,7 +30,7 @@ def Hubbard_SDE(u:np.float64, beta:np.float64, gamma_d:np.ndarray, gamma_m:np.nd
     return self_energy
 
 # Lattice Swinger-Dyson for the Hubbard-Holstein model
-def Hubbard_Holstein_SDE(u:np.float64, g0:np.float64, omega0:np.float64, beta:np.float64, gamma_d:np.ndarray, gamma_m:np.ndarray, A_d:np.ndarray, A_m:np.ndarray, chi_d_w_q:np.ndarray, chi_m_w_q:np.ndarray, F_d_loc:np.array, F_m_loc:np.array, chi0_nu_w_q:np.ndarray, self_old:np.ndarray, g_old:np.ndarray, dens:np.float64, qpoints:np.ndarray, Nk:int, Nqtot:int, mu:np.float64, dim:int=2, self_dga:np.ndarray=None):
+def Hubbard_Holstein_SDE(u:np.float64, g0:np.float64, omega0:np.float64, beta:np.float64, gamma_d:np.ndarray, gamma_m:np.ndarray, A_d:np.ndarray, A_m:np.ndarray, chi_d_w_q:np.ndarray, chi_m_w_q:np.ndarray, F_d_loc:np.array, F_m_loc:np.array, chi0_nu_w_q:np.ndarray, self_old:np.ndarray, g_old:np.ndarray, dens:np.float64, qpoints:np.ndarray, Nk:int, Nqtot:int, mu:np.float64, irrbz:bool, dim:int=2, self_dga:np.ndarray=None):
 
     #Here we also sum Fock term
     n4iwf = F_d_loc.shape[0]//2; n4iwb = chi_d_w_q.shape[0]//2
@@ -42,14 +42,14 @@ def Hubbard_Holstein_SDE(u:np.float64, g0:np.float64, omega0:np.float64, beta:np
     numats= build_nu_mats(n4iwf,beta)
 
     uw = Udyn_arr(omega=wmats, omega0=omega0, g=g0, u=u)
-    ununup = U_trans(nu=numats,nup=numats, omega0=omega0, g=g0, u=u)
-    u_d = np.reshape(2*uw-u,newshape=(2*n4iwb+1,1)) # will  be U_d(w,nu)
-    u_m = np.reshape( -u ,newshape=(1,1) ) # will be U_m(w,nu)
+    ununup = U_trans(nu=numats, nup=numats, omega0=omega0, g=g0, u=u)
+    u_d = np.reshape(2*uw-u, shape=(2*n4iwb+1,1)) # will  be U_d(w,nu)
+    u_m = np.reshape(-u, shape=(1,1) ) # will be U_m(w,nu)
 
     #USING OUR FORMULA
     theta_nu_wq = np.zeros( (2*n4iwf,2*n4iwb+1,Nq), dtype=np.complex128)
 
-    theta_nu_wq += -4.0*ununup[0,0] +2.0*np.reshape(uw,newshape=(1,len(uw),1)) # U terms
+    theta_nu_wq += -4.0*ununup[0,0] +2.0*np.reshape(uw, shape=(1,len(uw),1)) # U terms
 
     theta_nu_wq += -2*np.einsum('j,ijk->ijk',uw,gamma_d) + (A_d + 3*A_m)/beta # 34.1
 
@@ -70,10 +70,12 @@ def Hubbard_Holstein_SDE(u:np.float64, g0:np.float64, omega0:np.float64, beta:np
 
     #Here also Fock term
     #N.B. now working only for a local self-energy, for SC-DGA to be corrected for a k-dependent one
-    self_energy = self_sum_Uw_irr(self_old, g_old, theta_nu_wq, omega0, g0, beta, qpoints, Nk, Nqtot, dim, mu, mpi_rank,self_dga)
+    if irrbz:
+        self_energy = self_sum_Uw_irr(self_old, g_old, theta_nu_wq, omega0, g0, beta, qpoints, Nk, Nqtot, dim, mu, mpi_rank,self_dga)
+    else:
+        self_energy = self_sum_Uw(self_old, g_old, theta_nu_wq, omega0, g0, beta, qpoints, Nk, Nqtot, dim, mu, mpi_rank,self_dga)
+    
     #Hartree term
-
-
     #Hartree only on the master node
     if(mpi_rank==0):
         self_energy += (dens*( u - (4.0*g0**2/omega0) ) + g0**2/omega0)
@@ -116,14 +118,14 @@ def self_sum_Uw_irr(self_old:np.ndarray, g_old:np.ndarray, theta:np.ndarray,  om
         for inu in range(-n4iwf,n4iwf):
             nu=(np.pi/beta)*(2*inu+1)
             for ik in range(Nk):
-                k = ik2k(ik,dim,Nk)
+                k = ik2k(ik,dim,int(Nk**(1/dim)))
                 self_en[inu+n4iwf,ik] +=(0.5/beta)*np.sum( theta[inu+n4iwf,:,:] * G_wq_given_nuk_irr(nu,k,self_old,n4iwb,qpoints,beta,mu,self_dga)[:,:,i_sym])/Nqtot #vertex term
                 if( (g0!=0.0) and (not self_dga is None) ):
                     self_en[inu+n4iwf,ik] -= np.sum(G_wq_given_nuk_irr(nu,k,self_old,n4iwb,qpoints,beta,mu,self_dga)[:,:,i_sym]*Udyn_arr(build_w_mats(n4iwb,beta),omega0,g0).reshape(2*n4iwb+1,1))/beta/Nqtot
-            if( (g0!=0.0 and mpi_rank==0) and ( self_dga is None) ):
+            if( (g0!=0.0 and mpi_rank==0) and ( self_dga is None) and (i_sym==0)):
                 for inup in range(-niwf,niwf):
                     nup=(np.pi/beta)*(2*inup+1)
-                    self_en[inu+n4iwf,:] -= g_old[inup+niwf]*Udyn(nu-nup,omega0,g0,u=0.0)*np.exp(1j*nup*1e-10)/beta/8
+                    self_en[inu+n4iwf,:] -= g_old[inup+niwf]*Udyn(nu-nup,omega0,g0,u=0.0)*np.exp(1j*nup*1e-10)/beta
     return self_en
 
 #internal auxiliary routine

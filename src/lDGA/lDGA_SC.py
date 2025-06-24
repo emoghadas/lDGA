@@ -7,7 +7,7 @@ import numpy as np
 import h5py
 from datetime import datetime
 import lDGA.config as cfg
-import lDGA.dmft_reader as dmft_reader
+from lDGA.dmft_reader import read_dmft_config
 import lDGA.bse as bse
 import lDGA.utilities as util
 import lDGA.lambda_corr as lamb
@@ -31,16 +31,19 @@ match filenum:
 
 
 
-dga_cfg = cfg.DGA_Config(dmft_file)
-reader = dmft_reader.DMFT_Reader(dga_cfg)
+dga_cfg = read_dmft_config(dmft_file)
+ #dga_cfg = cfg.DGA_Config(dmft_file)
+ #reader = dmft_reader.DMFT_Reader(dga_cfg)
 
-beta = np.float64(dga_cfg.dmft_dict['beta'])
-mu = dga_cfg.dmft_dict['mu']
-u = dga_cfg.dmft_dict['U']
-n = dga_cfg.dmft_dict['occ']
-g = dga_cfg.dmft_dict['giw']
-s = dga_cfg.dmft_dict['siw']
-chi = dga_cfg.dmft_dict['chi_ph']
+beta = np.float64(dga_cfg.beta)
+
+g = dga_cfg.g_imp
+s = dga_cfg.s_imp
+chi = dga_cfg.chi_ph
+
+mu = dga_cfg.mu_imp
+u = dga_cfg.U
+n = dga_cfg.occ_imp
 niwf = dga_cfg.niwf
 n4iwf = dga_cfg.n4iwf
 n4iwb = dga_cfg.n4iwb
@@ -53,7 +56,7 @@ if irrbz:
 else:
     n_qpoints = nq**kdim
     nk = dga_cfg.nk
-max_iter = dga_cfg.max_iter
+max_iter = 5 #dga_cfg.max_iter
 w0 = dga_cfg.w0
 g0 = dga_cfg.g0
 lambda_type = dga_cfg.lambda_type
@@ -259,6 +262,7 @@ for iter in range(1,max_iter):
     new_mu=0.0
     if(rank==0):
         new_mu = util.get_mu( mu, n, sigma_dga, k_grid, beta )
+        print("new_mu found:",new_mu)
     new_mu = comm.bcast(new_mu, root=0)
 
     convg=False

@@ -51,6 +51,7 @@ if irrbz:
     n_qpoints = int(nq*(nq+1)/2)
     nk = 2*nq-2
 else:
+    n_qpoints = nq**kdim
     nk = dga_cfg.nk
 max_iter = dga_cfg.max_iter
 w0 = dga_cfg.w0

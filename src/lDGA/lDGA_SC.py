@@ -30,8 +30,9 @@ match filenum:
         raise ValueError(f"Wrong filenum={filenum}")
 
 
+toml_file="dga.toml"
 
-dga_cfg = read_dmft_config(dmft_file,)
+dga_cfg = read_dmft_config(dmft_file, toml_file )
  #dga_cfg = cfg.DGA_Config(dmft_file)
  #reader = dmft_reader.DMFT_Reader(dga_cfg)
 
@@ -57,11 +58,16 @@ if irrbz:
 else:
     n_qpoints = nq**kdim
     nk = dga_cfg.nk
-max_iter = 5 #dga_cfg.max_iter
+max_iter = dga_cfg.max_iter
 w0 = dga_cfg.w0
 g0 = dga_cfg.g0
 lambda_type = dga_cfg.lambda_type
 file_name = dga_cfg.file_name
+
+
+print(f" Here U={u} - g0={g0} - w0={w0}")
+
+
 now_obj = datetime.now()
 now = now_obj.strftime("%Y-%m-%d_%H:%M:%S")
 
@@ -84,15 +90,18 @@ comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
 size = comm.Get_size()
 
-print("**************************************")
-print("Doing Hubbard-Holstein calculation...")
-print(f" Here U={u} - g0={g0} - w0={w0}")
-print(f"Size of frequencies:")
-print(f"niwf: {niwf} - n4iwf: {n4iwf} - n4iwb: {n4iwb}")
-lambda_ph = 2*g0**2/w0
-print("lambda_ph:",lambda_ph)
-print(f"n={n} - mu={mu} - beta={beta}")
-print("**************************************")
+if(rank==0):
+    print("**************************************")
+    print("Doing Hubbard-Holstein calculation...")
+    print(f" Here U={u} - g0={g0} - w0={w0}")
+    print(f"Size of frequencies:")
+    print(f"niwf: {niwf} - n4iwf: {n4iwf} - n4iwb: {n4iwb}")
+    lambda_ph = 2*g0**2/w0
+    print("lambda_ph:",lambda_ph)
+    print(f"n={n} - mu={mu} - beta={beta}")
+    print("**************************************")
+
+print("ts:",dga_cfg.ts)
 
 
 q = np.linspace(0, np.pi, nq, endpoint=True)

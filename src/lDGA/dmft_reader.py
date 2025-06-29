@@ -9,7 +9,7 @@ import os # For path handling
 # Assuming config.py is in the same package/directory.
 from .config import DGA_Config 
 
-def read_dmft_config(hdf5_dmftfile_path: str, toml_dgafile_path:str, ts=np.array([1.0,0.0],dtype=np.complex128)) -> DGA_Config:
+def read_dmft_config( hdf5_dmftfile_path: str, toml_dgafile_path:str ) -> DGA_Config:
     """
     Reads DMFT data from an HDF5 file and creates a fully populated
     DGA_Config jitclass object.
@@ -92,7 +92,7 @@ def read_dmft_config(hdf5_dmftfile_path: str, toml_dgafile_path:str, ts=np.array
     with open(toml_dgafile_path,'r') as f:
         toml_config = toml.load(f)
     
-    ts = get_config_value(toml_config,"lattice.ts",default_value=np.array([1.0,0.0]))
+    ts = np.complex128(get_config_value(toml_config,"lattice.ts",default=np.array([1.0,0.0])))
     g0 = get_config_value(toml_config,"phonons.g0",default=0.1 )
     w0 = get_config_value(toml_config,"phonons.w0",default=1.0 )
     max_iter = get_config_value(toml_config,"dga.max_iter",default=1 )
@@ -100,6 +100,7 @@ def read_dmft_config(hdf5_dmftfile_path: str, toml_dgafile_path:str, ts=np.array
     lambda_type = get_config_value(toml_config,"dga.lambda_type",default="Pauli")
     lambda_decay = get_config_value(toml_config,"dga.lambda_decay",default=1)
     irrbz = get_config_value(toml_config,"lattice.irrbz",default=False)
+    print("Read toml")
 
     # Construct and return the DGA_Config instance with all loaded data
     # All mandatory arguments (hdf5_file_path, g_imp_data, s_imp_data, chi_ph_data) are provided.
@@ -128,10 +129,11 @@ def read_dmft_config(hdf5_dmftfile_path: str, toml_dgafile_path:str, ts=np.array
         max_iter=max_iter,
         file_name=file_name,
         lambda_type=lambda_type,
+        lambda_decay=lambda_decay
     )
 
 
-def get_config_value(config_data, key_path, default_value):
+def get_config_value(config_data, key_path, default):
     """
     Safely extracts a value from nested dictionaries (like TOML data)
     and returns a default if the key path does not exist.
@@ -139,10 +141,10 @@ def get_config_value(config_data, key_path, default_value):
     Args:
         config_data (dict): The loaded TOML data.
         key_path (str): A dot-separated string representing the key path (e.g., "database.port").
-        default_value: The value to return if the key is not found.
+        default: The value to return if the key is not found.
 
     Returns:
-        The value from the config or the default_value.
+        The value from the config or the default.
     """
     keys = key_path.split('.')
     current_data = config_data
@@ -151,5 +153,5 @@ def get_config_value(config_data, key_path, default_value):
             current_data = current_data[key]
         else:
             # If a key in the path is not found, return the default value
-            return default_value
+            return default
     return current_data

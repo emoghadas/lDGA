@@ -1,0 +1,14 @@
+[dga]
+	max_iter=5
+	file_name="res"
+	lambda_type="Pauli"
+	lambda_decay=2
+
+[lattice]
+	ts = [1.0, -0.15]
+	irrbz = true
+	
+[phonons]
+	g0 = 0.5
+	w0 = 1.0
+

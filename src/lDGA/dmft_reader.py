@@ -1,6 +1,7 @@
 # dmft_reader.py
 # dmft_reader.py
 import h5py as h5
+import toml
 import numpy as np
 from typing import Tuple # For type hinting if needed, though not strictly used in return
 import os # For path handling
@@ -8,7 +9,7 @@ import os # For path handling
 # Assuming config.py is in the same package/directory.
 from .config import DGA_Config 
 
-def read_dmft_config(hdf5_file_path: str, ts=np.array([1.0,0.0],dtype=np.complex128)) -> DGA_Config:
+def read_dmft_config(hdf5_dmftfile_path: str, toml_dgafile_path:str, ts=np.array([1.0,0.0],dtype=np.complex128)) -> DGA_Config:
     """
     Reads DMFT data from an HDF5 file and creates a fully populated
     DGA_Config jitclass object.
@@ -31,7 +32,7 @@ def read_dmft_config(hdf5_file_path: str, ts=np.array([1.0,0.0],dtype=np.complex
     chi_ph_data = None
 
     try:
-        with h5.File(hdf5_file_path, 'r') as f:
+        with h5.File(hdf5_dmftfile_path, 'r') as f:
             # Read general info
             beta = float(f['.config'].attrs['general.beta'])
             U = float(f['.config'].attrs['atoms.1.udd'])
@@ -81,23 +82,37 @@ def read_dmft_config(hdf5_file_path: str, ts=np.array([1.0,0.0],dtype=np.complex
             chi_ph_data = chi_ph_data.astype(np.complex128)
 
     except KeyError as e:
-        print(f"Error reading HDF5 file '{hdf5_file_path}': Missing expected key or attribute: {e}")
+        print(f"Error reading HDF5 file '{hdf5_dmftfile_path}': Missing expected key or attribute: {e}")
         raise
     except Exception as e:
-        print(f"An unexpected error occurred during HDF5 loading from '{hdf5_file_path}': {e}")
+        print(f"An unexpected error occurred during HDF5 loading from '{hdf5_dmftfile_path}': {e}")
         raise
+
+    # Reading the TOML config file of DGA
+    with open(toml_dgafile_path,'r') as f:
+        toml_config = toml.load(f)
+    
+    ts = get_config_value(toml_config,"lattice.ts",default_value=np.array([1.0,0.0]))
+    g0 = get_config_value(toml_config,"phonons.g0",default=0.1 )
+    w0 = get_config_value(toml_config,"phonons.w0",default=1.0 )
+    max_iter = get_config_value(toml_config,"dga.max_iter",default=1 )
+    file_name = get_config_value(toml_config,"dga.file_name",default="result")
+    lambda_type = get_config_value(toml_config,"dga.lambda_type",default="Pauli")
+    lambda_decay = get_config_value(toml_config,"dga.lambda_decay",default=1)
+    irrbz = get_config_value(toml_config,"lattice.irrbz",default=False)
 
     # Construct and return the DGA_Config instance with all loaded data
     # All mandatory arguments (hdf5_file_path, g_imp_data, s_imp_data, chi_ph_data) are provided.
     # Other arguments can use their defaults from DGA_Config's __init__
     return DGA_Config(
-        hdf5_file=hdf5_file_path,
+        hdf5_file=hdf5_dmftfile_path,
+        toml_file=toml_dgafile_path,
         g_imp=g_imp_data,
         s_imp=s_imp_data,
         chi_ph=chi_ph_data,
         ts=ts,
         
-        # Parameters read from file, overriding DGA_Config defaults
+        # Parameters read from  DMFT file, overriding DGA_Config defaults
         beta=beta,
         U=U,
         mu_imp=mu_imp,
@@ -106,7 +121,35 @@ def read_dmft_config(hdf5_file_path: str, ts=np.array([1.0,0.0],dtype=np.complex
         n4iwf=n4iwf,
         n4iwb=n4iwb,
         
-        # Parameters from DGA_Config defaults (if not in HDF5)
-        # w0=w0, # You can uncomment this if w0/g0 are read from file or differ from DGA_Config default
-        # g0=g0,
+        # Parameters from toml_config
+        w0=w0,
+        g0=g0,
+        irrbz=irrbz,
+        max_iter=max_iter,
+        file_name=file_name,
+        lambda_type=lambda_type,
     )
+
+
+def get_config_value(config_data, key_path, default_value):
+    """
+    Safely extracts a value from nested dictionaries (like TOML data)
+    and returns a default if the key path does not exist.
+
+    Args:
+        config_data (dict): The loaded TOML data.
+        key_path (str): A dot-separated string representing the key path (e.g., "database.port").
+        default_value: The value to return if the key is not found.
+
+    Returns:
+        The value from the config or the default_value.
+    """
+    keys = key_path.split('.')
+    current_data = config_data
+    for i, key in enumerate(keys):
+        if isinstance(current_data, dict) and key in current_data:
+            current_data = current_data[key]
+        else:
+            # If a key in the path is not found, return the default value
+            return default_value
+    return current_data

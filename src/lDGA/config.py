@@ -5,6 +5,7 @@ import numpy as np
 
 dga_config_spec = [
     ('hdf5_file', nb.types.string),
+    ('toml_file', nb.types.string),
     ('file_name', nb.types.string),
     ('kdim', nb.int64),
     ('nk', nb.int64),
@@ -49,7 +50,9 @@ class DGA_Config:
     Configuration settings for the DGammaA calculation, optimized with Numba.
     Here we should put all terms that do not change during the DGA calculation.
     """
-    def __init__(self, hdf5_file: str,
+    def __init__(self,
+                hdf5_file: str,
+                toml_file: str,
                 # Make these mandatory by removing default = None
                 g_imp: np.ndarray,
                 s_imp: np.ndarray,
@@ -65,6 +68,7 @@ class DGA_Config:
                 mu_imp: float = 0.0, occ_imp: float = 0.0):
 
         self.hdf5_file = hdf5_file
+        self.toml_file = toml_file
         self.file_name = file_name
         # Lattice parameters    
         self.kdim = kdim

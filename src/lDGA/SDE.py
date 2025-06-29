@@ -1,15 +1,18 @@
 import numpy as np
 from lDGA.utilities import ik2k, k2ik, G_wq_given_nuk, G_wq_given_nuk_irr, Udyn_arr, G_w_given_nu, U_trans, Udyn, build_nu_mats, build_w_mats,Udyn_arr
 from numba import jit
+from numba.experimental import jitclass
+from config import DGA_ConfigType
 from mpi4py import MPI
 
 
 # Lattice Swinger-Dyson for the Hubbard model
 #TODO: CHECK FOR POSSIBLE BUGS AT LEAST ON SELF_SUM_U
-def Hubbard_SDE(u:np.float64, beta:np.float64, gamma_d:np.ndarray, gamma_m:np.ndarray, chi_d_w_q:np.ndarray, chi_m_w_q:np.ndarray, F_d_loc:np.array, F_m_loc:np.array, chi0_nu_w_q:np.ndarray, self_old:np.ndarray, dens:np.float64, qpoints:np.ndarray, Nk:int, mu:np.float64, dim:int=2, self_dga:np.ndarray=None):
-    n4iwf=F_d_loc.shape[0]//2
-    n4iwb,Nq = chi_d_w_q.shape
-    n4iwb = n4iwb//2
+def Hubbard_SDE(dga_cfg:DGA_ConfigType, gamma_d:np.ndarray, gamma_m:np.ndarray, chi_d_w_q:np.ndarray, chi_m_w_q:np.ndarray, F_d_loc:np.array, F_m_loc:np.array, chi0_nu_w_q:np.ndarray, self_old:np.ndarray, dens:np.float64, qpoints:np.ndarray, Nk:int, mu:np.float64, dim:int=2, self_dga:np.ndarray=None):
+    u=dga_cfg.U; beta=dga_cfg.beta
+    n4iwf=dga_cfg.n4iwf; n4iwb=dga_cfg.n4iwb
+    _ , Nq = chi_d_w_q.shape
+
     self_energy = np.zeros( (2*n4iwf,Nk), dtype=np.complex128)
     F_updn = F_d_loc - F_m_loc
 
@@ -30,10 +33,15 @@ def Hubbard_SDE(u:np.float64, beta:np.float64, gamma_d:np.ndarray, gamma_m:np.nd
     return self_energy
 
 # Lattice Swinger-Dyson for the Hubbard-Holstein model
-def Hubbard_Holstein_SDE(u:np.float64, g0:np.float64, omega0:np.float64, beta:np.float64, gamma_d:np.ndarray, gamma_m:np.ndarray, A_d:np.ndarray, A_m:np.ndarray, chi_d_w_q:np.ndarray, chi_m_w_q:np.ndarray, F_d_loc:np.array, F_m_loc:np.array, chi0_nu_w_q:np.ndarray, self_old:np.ndarray, g_old:np.ndarray, dens:np.float64, qpoints:np.ndarray, Nk:int, Nqtot:int, mu:np.float64, irrbz:bool, dim:int=2, self_dga:np.ndarray=None):
+def Hubbard_Holstein_SDE(dga_cfg:DGA_ConfigType, gamma_d:np.ndarray, gamma_m:np.ndarray, A_d:np.ndarray, A_m:np.ndarray, chi_d_w_q:np.ndarray, chi_m_w_q:np.ndarray, F_d_loc:np.array, F_m_loc:np.array, chi0_nu_w_q:np.ndarray, qpoints:np.ndarray, Nk:int, Nqtot:int, mu:np.float64, irrbz:bool, dim:int=2, self_dga:np.ndarray=None):
 
     #Here we also sum Fock term
-    n4iwf = F_d_loc.shape[0]//2; n4iwb = chi_d_w_q.shape[0]//2
+    u=dga_cfg.U; beta=dga_cfg.beta
+    g0=dga_cfg.g0; omega0=dga_cfg.w0
+    n4iwf=dga_cfg.n4iwf; n4iwb=dga_cfg.n4iwb
+    self_old=dga_cfg.s_imp
+    g_old=dga_cfg.g_imp
+    dens=dga_cfg.occ_imp
     Nq    = chi_d_w_q.shape[1]
 
     self_energy = np.zeros( (2*n4iwf,Nk), dtype=np.complex128)

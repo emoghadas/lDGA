@@ -8,7 +8,7 @@ import os # For path handling
 # Assuming config.py is in the same package/directory.
 from .config import DGA_Config 
 
-def read_dmft_config(hdf5_file_path: str) -> DGA_Config:
+def read_dmft_config(hdf5_file_path: str, ts=np.array([1.0,0.0],dtype=np.complex128)) -> DGA_Config:
     """
     Reads DMFT data from an HDF5 file and creates a fully populated
     DGA_Config jitclass object.
@@ -95,6 +95,7 @@ def read_dmft_config(hdf5_file_path: str) -> DGA_Config:
         g_imp=g_imp_data,
         s_imp=s_imp_data,
         chi_ph=chi_ph_data,
+        ts=ts,
         
         # Parameters read from file, overriding DGA_Config defaults
         beta=beta,

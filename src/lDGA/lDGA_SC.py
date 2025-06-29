@@ -31,7 +31,7 @@ match filenum:
 
 
 
-dga_cfg = read_dmft_config(dmft_file)
+dga_cfg = read_dmft_config(dmft_file,)
  #dga_cfg = cfg.DGA_Config(dmft_file)
  #reader = dmft_reader.DMFT_Reader(dga_cfg)
 
@@ -53,6 +53,7 @@ nq = dga_cfg.nq
 if irrbz:
     n_qpoints = int(nq*(nq+1)/2)
     nk = 2*nq-2
+    dga_cfg.nk
 else:
     n_qpoints = nq**kdim
     nk = dga_cfg.nk
@@ -122,7 +123,7 @@ print("Calculate local bubble - rank:",rank)
 sys.stdout.flush()
 
 # local bubble on each process
-chi0_w = bse.chi0_loc_w(beta, g, n4iwf, n4iwb)
+chi0_w = bse.chi0_loc_w(dga_cfg)
 
 # kgrid has to be initialized beforehand
 kpoints = np.linspace(-np.pi, np.pi, nk, endpoint=False)
@@ -134,13 +135,13 @@ print("Calculate lattice bubble - rank:",rank)
 sys.stdout.flush()
 
 # lattice bubble for each processes' q-points
-chi0_w_q = bse.chi0_w_q(beta, mu, s, k_grid, q_grid_loc, n4iwf, n4iwb)
+chi0_w_q = bse.chi0_w_q(dga_cfg, mu, k_grid, q_grid_loc)
 
 print("Calculate lattice susceptibility and hedin vertex - rank:",rank)
 sys.stdout.flush()
 
 # compute chi and v
-chi_d_w_q, v_d_w_q, A_d, chi_m_w_q, v_m_w_q ,A_m = bse.chi_v_r_w_q(beta, u, w0, g0, chi0_w, chi0_w_q, chi, n4iwf, n4iwb, q_grid_loc)
+chi_d_w_q, v_d_w_q, A_d, chi_m_w_q, v_m_w_q ,A_m = bse.chi_v_r_w_q(dga_cfg, chi0_w, chi0_w_q, q_grid_loc)
 
 print("Calculate chi_d/m_latt for lambda corrections - rank:",rank)
 sys.stdout.flush()
@@ -186,7 +187,7 @@ sys.stdout.flush()
 
 # sde for selfenergy
 F_d_loc, F_m_loc = bse.F_r_loc(beta, chi0_w, chi, n4iwf, n4iwb)
-sigma_dga_q = sde.Hubbard_Holstein_SDE(u, g0, w0, beta, v_d_w_q, v_m_w_q, A_d,A_m, chi_d_w_q, chi_m_w_q, F_d_loc, F_m_loc, chi0_w_q, s, g, n, q_grid_loc, n_kpoints, n_kpoints, mu, irrbz, kdim)
+sigma_dga_q = sde.Hubbard_Holstein_SDE(dga_cfg, v_d_w_q, v_m_w_q, A_d,A_m, chi_d_w_q, chi_m_w_q, F_d_loc, F_m_loc, chi0_w_q, q_grid_loc, n_kpoints, n_kpoints, mu, irrbz, kdim)
 
 if(max_iter==1):
     sigma_dga = np.zeros_like(sigma_dga_q,dtype=np.complex128) if rank==0 else None
@@ -227,9 +228,9 @@ for iter in range(1,max_iter):
     print(f"***** Doing iter={iter} *****")
 
 
-    chi0_w_q = bse.chi0_w_q(beta, new_mu, s, k_grid, q_grid_loc, n4iwf, n4iwb, s_dga=sigma_dga)
+    chi0_w_q = bse.chi0_w_q(dga_cfg, new_mu, k_grid, q_grid_loc, s_dga=sigma_dga)
 
-    chi_d_w_q, v_d_w_q, A_d, chi_m_w_q, v_m_w_q ,A_m = bse.chi_v_r_w_q(beta, u, w0, g0, chi0_w, chi0_w_q, chi, n4iwf, n4iwb, q_grid_loc)
+    chi_d_w_q, v_d_w_q, A_d, chi_m_w_q, v_m_w_q ,A_m = bse.chi_v_r_w_q(dga_cfg, chi0_w, chi0_w_q, q_grid_loc)
 
     # store new chis in chi_r_latt
     chi_d_q_full = np.zeros([2*n4iwb+1, n_qpoints], dtype=np.complex128)
@@ -239,7 +240,7 @@ for iter in range(1,max_iter):
 
     chi_d_latt = np.zeros_like(chi_d_q_full) if rank==0 else None
     chi_m_latt = np.zeros_like(chi_d_q_full) if rank==0 else None
-
+    print(f"Process {rank}: ready to pass chi_lattice")
     comm.Reduce(chi_d_q_full, chi_d_latt, op=MPI.SUM, root=0)
     comm.Reduce(chi_m_q_full, chi_m_latt, op=MPI.SUM, root=0)
 
@@ -250,7 +251,7 @@ for iter in range(1,max_iter):
     chi_d_w_q = chi_d_w_q / (1.0 + lambda_d*chi_d_w_q)
     chi_m_w_q = chi_m_w_q / (1.0 + lambda_m*chi_m_w_q)
 
-    sigma_dga_q = sde.Hubbard_Holstein_SDE(u, g0, w0, beta, v_d_w_q, v_m_w_q, A_d,A_m, chi_d_w_q, chi_m_w_q, F_d_loc, F_m_loc, chi0_w_q, s, g, n, q_grid_loc, n_kpoints, n_kpoints, new_mu, irrbz, kdim, sigma_dga)
+    sigma_dga_q = sde.Hubbard_Holstein_SDE(dga_cfg, v_d_w_q, v_m_w_q, A_d,A_m, chi_d_w_q, chi_m_w_q, F_d_loc, F_m_loc, chi0_w_q,  q_grid_loc, n_kpoints, n_kpoints, new_mu, irrbz, kdim, sigma_dga)
 
     if(rank==0):
         old_mu=new_mu*1

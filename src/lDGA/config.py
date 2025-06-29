@@ -39,6 +39,7 @@ dga_config_spec = [
                                # or if you use nb.optional(nb.complex128[:])
     ('s_imp', nb.complex128[:]),
     ('chi_ph', nb.complex128[:,:,:,:]),
+    ('ts', nb.complex128[:]),
 ]
 
 
@@ -53,9 +54,10 @@ class DGA_Config:
                 g_imp: np.ndarray,
                 s_imp: np.ndarray,
                 chi_ph: np.ndarray,
+                ts:np.ndarray,
                 # Other parameters (can still have defaults)
                 file_name: str = "results",
-                kdim: int = 2, nk: int = 8, nq: int = 8, irrbz: bool = True,
+                kdim: int = 2, nk: int = 4, nq: int = 4, irrbz: bool = True,
                 niwf: int = 1000, n4iwf: int = 100, n4iwb: int = 100,
                 max_iter: int = 1, lambda_decay: int = 1, lambda_type: str = "Pauli",
                 use_mpi: bool = True,
@@ -89,3 +91,8 @@ class DGA_Config:
         self.g_imp = g_imp
         self.s_imp = s_imp
         self.chi_ph = chi_ph
+        self.ts = ts
+
+#Instance important to pass to function
+DGA_ConfigType = DGA_Config.class_type.instance_type
+

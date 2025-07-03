@@ -1,12 +1,12 @@
 import numpy as np
 from numba import jit
 from numba.experimental import jitclass
-from config import DGA_ConfigType
+from lDGA.config import DGA_ConfigType
 from lDGA.utilities import k2ik, build_nu_mats, build_w_mats, U_trans, Udyn_arr, G_wq_given_nuk, ek_2d
 #from ._fast_bubble import ek_3d, calc_bubble, calc_bubble_gl
 
 @jit(nopython=True)
-def asymp_chi(nu, beta):
+def asymp_chi(nu, beta) -> np.float64:
     """
     Returns bubble asymptotic -2*beta/nu^2,
     excluding inner fermionic Matsubara frequencies up
@@ -16,7 +16,7 @@ def asymp_chi(nu, beta):
     return 2*beta*(1/8. - summ/np.pi**2)
 
 @jit(nopython=True)
-def chi0_w_q(dga_cfg : DGA_ConfigType , mu:float, k_grid:np.ndarray, qpoints: np.ndarray, s_dga:np.ndarray=None) -> np.ndarray:
+def chi0_w_q(dga_cfg : DGA_ConfigType , mu:np.float64, k_grid:np.ndarray, qpoints: np.ndarray, s_dga:np.ndarray=None) -> np.ndarray:
     '''
     Compute lattice bubble chi0 for all iw and range of q-points
     '''
@@ -70,10 +70,13 @@ def chi0_loc_w(dga_cfg : DGA_ConfigType ) -> np.ndarray:
 
 
 @jit(nopython=True)
-def F_r_loc(beta:float, chi0_w:np.ndarray, chi:np.ndarray, n4iwf:int, n4iwb:int) -> tuple[np.ndarray, np.ndarray]:
+def F_r_loc(dga_cfg : DGA_ConfigType, chi0_w:np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     '''
     Compute local vertex F for all iw
     '''
+    beta = dga_cfg.beta; chi=dga_cfg.chi_ph
+    n4iwf=dga_cfg.n4iwf; n4iwb=dga_cfg.n4iwb
+
     chi_m = chi[0,...] - chi[1,...]
     chi_d = chi[0,...] + chi[1,...]
 

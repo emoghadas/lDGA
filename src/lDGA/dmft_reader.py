@@ -2,14 +2,13 @@
 # dmft_reader.py
 import h5py as h5
 import toml
+#import tomllib
 import numpy as np
 from typing import Tuple # For type hinting if needed, though not strictly used in return
 import os # For path handling
+from lDGA.config import DGA_Config 
 
-# Assuming config.py is in the same package/directory.
-from .config import DGA_Config 
-
-def read_dmft_config( hdf5_dmftfile_path: str, toml_dgafile_path:str ) -> DGA_Config:
+def read_dmft_config(hdf5_dmftfile_path: str, toml_dgafile_path:str) -> DGA_Config:
     """
     Reads DMFT data from an HDF5 file and creates a fully populated
     DGA_Config jitclass object.
@@ -76,7 +75,7 @@ def read_dmft_config( hdf5_dmftfile_path: str, toml_dgafile_path:str ) -> DGA_Co
             g_tr = giw[nu_range]
 
             gg_straight = np.tensordot(g_tr,g_tr,((),()))
-            g4iw_sym[...,n4iwb] = g4iw_sym[...,n4iwb] - gg_straight.reshape(1,*gg_straight.shape)
+            g4iw_sym[...,n4iwb] = g4iw_sym[...,n4iwb] - gg_straight.reshape(1, *gg_straight.shape)
             
             chi_ph_data = g4iw_sym * beta # Use the loaded beta
             chi_ph_data = chi_ph_data.astype(np.complex128)
@@ -89,47 +88,53 @@ def read_dmft_config( hdf5_dmftfile_path: str, toml_dgafile_path:str ) -> DGA_Co
         raise
 
     # Reading the TOML config file of DGA
-    with open(toml_dgafile_path,'r') as f:
+    with open(toml_dgafile_path, 'r') as f:
         toml_config = toml.load(f)
     
-    ts = np.complex128(get_config_value(toml_config,"lattice.ts",default=np.array([1.0,0.0])))
-    g0 = get_config_value(toml_config,"phonons.g0",default=0.1 )
-    w0 = get_config_value(toml_config,"phonons.w0",default=1.0 )
-    max_iter = get_config_value(toml_config,"dga.max_iter",default=1 )
-    file_name = get_config_value(toml_config,"dga.file_name",default="result")
-    lambda_type = get_config_value(toml_config,"dga.lambda_type",default="Pauli")
-    lambda_decay = get_config_value(toml_config,"dga.lambda_decay",default=1)
-    irrbz = get_config_value(toml_config,"lattice.irrbz",default=False)
-    print("Read toml")
+    ts = np.complex128(get_config_value(toml_config, "lattice.ts", default=np.array([1.0,0.0])))
+    g0 = get_config_value(toml_config,"phonons.g0", default=0.1**0.5)
+    w0 = get_config_value(toml_config,"phonons.w0", default=1.0)
+    max_iter = get_config_value(toml_config, "dga.max_iter", default=1)
+    file_name = get_config_value(toml_config, "dga.file_name", default="result")
+    lambda_type = get_config_value(toml_config, "dga.lambda_type", default="Pauli")
+    lambda_decay = get_config_value(toml_config, "dga.lambda_decay", default=1)
+    irrbz = get_config_value(toml_config, "lattice.irrbz", default=False)
+    nk = get_config_value(toml_config, "lattice.nk", default=4)
+    nq = get_config_value(toml_config, "lattice.nq", default=4)
+    test = toml_config.get("test", "Hello World")
+    print("Read toml: ", test)
 
     # Construct and return the DGA_Config instance with all loaded data
     # All mandatory arguments (hdf5_file_path, g_imp_data, s_imp_data, chi_ph_data) are provided.
     # Other arguments can use their defaults from DGA_Config's __init__
     return DGA_Config(
-        hdf5_file=hdf5_dmftfile_path,
-        toml_file=toml_dgafile_path,
-        g_imp=g_imp_data,
-        s_imp=s_imp_data,
-        chi_ph=chi_ph_data,
-        ts=ts,
+        hdf5_file = hdf5_dmftfile_path,
+        toml_file = toml_dgafile_path,
+        g_imp = g_imp_data,
+        s_imp = s_imp_data,
+        chi_ph = chi_ph_data,
+        ts = ts,
         
         # Parameters read from  DMFT file, overriding DGA_Config defaults
-        beta=beta,
-        U=U,
-        mu_imp=mu_imp,
-        occ_imp=occ_imp,
-        niwf=niwf,
-        n4iwf=n4iwf,
-        n4iwb=n4iwb,
+        beta = beta,
+        U = U,
+        mu_imp = mu_imp,
+        occ_imp = occ_imp,
+        niwf = niwf,
+        n4iwf = n4iwf,
+        n4iwb = n4iwb,
         
         # Parameters from toml_config
-        w0=w0,
-        g0=g0,
-        irrbz=irrbz,
-        max_iter=max_iter,
-        file_name=file_name,
-        lambda_type=lambda_type,
-        lambda_decay=lambda_decay
+        w0 = w0,
+        g0 = g0,
+        irrbz = irrbz,
+        nk = nk,
+        nq = nq,
+        max_iter = max_iter,
+        file_name = file_name,
+        lambda_type = lambda_type,
+        lambda_decay = lambda_decay
+
     )
 
 

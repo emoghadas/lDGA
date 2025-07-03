@@ -17,7 +17,7 @@ import sys
 import scipy.optimize as scop
 import matplotlib.pyplot as plt
 
-# TODO: check whether this can be done in parallel
+
 filenum=1 # 0 is Hubb only - 1 is Hubb-Hol -2 is Hubb-Hol many freq
 match filenum:
     case 0:
@@ -32,7 +32,7 @@ match filenum:
 
 toml_file="dga.toml"
 
-dga_cfg = read_dmft_config(dmft_file, toml_file )
+dga_cfg = read_dmft_config(dmft_file, toml_file)
  #dga_cfg = cfg.DGA_Config(dmft_file)
  #reader = dmft_reader.DMFT_Reader(dga_cfg)
 
@@ -54,7 +54,7 @@ nq = dga_cfg.nq
 if irrbz:
     n_qpoints = int(nq*(nq+1)/2)
     nk = 2*nq-2
-    dga_cfg.nk
+    dga_cfg.nk = nk
 else:
     n_qpoints = nq**kdim
     nk = dga_cfg.nk
@@ -63,10 +63,6 @@ w0 = dga_cfg.w0
 g0 = dga_cfg.g0
 lambda_type = dga_cfg.lambda_type
 file_name = dga_cfg.file_name
-
-
-print(f" Here U={u} - g0={g0} - w0={w0}")
-
 
 now_obj = datetime.now()
 now = now_obj.strftime("%Y-%m-%d_%H:%M:%S")
@@ -83,8 +79,8 @@ match filenum:
         g0 = 0.1**0.5
     case default:
         raise ValueError(f"Wrong filenum={filenum}")
-
-
+dga_cfg.g0 = g0
+dga_cfg.w0 = w0
 
 comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
@@ -97,13 +93,14 @@ if(rank==0):
     print(f"Size of frequencies:")
     print(f"niwf: {niwf} - n4iwf: {n4iwf} - n4iwb: {n4iwb}")
     lambda_ph = 2*g0**2/w0
-    print("lambda_ph:",lambda_ph)
+    print("lambda_ph:", lambda_ph)
     print(f"n={n} - mu={mu} - beta={beta}")
     print("**************************************")
+    print("Hopping amplitudes:")
+    print("ts:", dga_cfg.ts)
 
-print("ts:",dga_cfg.ts)
 
-
+# TODO: move this to separate function
 q = np.linspace(0, np.pi, nq, endpoint=True)
 if irrbz:
     if kdim!=2:
@@ -139,6 +136,7 @@ kpoints = np.linspace(-np.pi, np.pi, nk, endpoint=False)
 k_grid = np.meshgrid(kpoints, kpoints)
 k_grid = np.array(k_grid).reshape(2,-1).T
 n_kpoints = nk**kdim
+print(n_kpoints)
 
 print("Calculate lattice bubble - rank:",rank)
 sys.stdout.flush()
@@ -195,8 +193,8 @@ print("Calculate SDE for selfenergy")
 sys.stdout.flush()
 
 # sde for selfenergy
-F_d_loc, F_m_loc = bse.F_r_loc(beta, chi0_w, chi, n4iwf, n4iwb)
-sigma_dga_q = sde.Hubbard_Holstein_SDE(dga_cfg, v_d_w_q, v_m_w_q, A_d,A_m, chi_d_w_q, chi_m_w_q, F_d_loc, F_m_loc, chi0_w_q, q_grid_loc, n_kpoints, n_kpoints, mu, irrbz, kdim)
+F_d_loc, F_m_loc = bse.F_r_loc(dga_cfg, chi0_w)
+sigma_dga_q = sde.Hubbard_Holstein_SDE(dga_cfg, v_d_w_q, v_m_w_q, A_d,A_m, chi_d_w_q, chi_m_w_q, F_d_loc, F_m_loc, chi0_w_q, q_grid_loc, n_kpoints, n_kpoints, mu)
 
 if(max_iter==1):
     sigma_dga = np.zeros_like(sigma_dga_q,dtype=np.complex128) if rank==0 else None
@@ -260,7 +258,7 @@ for iter in range(1,max_iter):
     chi_d_w_q = chi_d_w_q / (1.0 + lambda_d*chi_d_w_q)
     chi_m_w_q = chi_m_w_q / (1.0 + lambda_m*chi_m_w_q)
 
-    sigma_dga_q = sde.Hubbard_Holstein_SDE(dga_cfg, v_d_w_q, v_m_w_q, A_d,A_m, chi_d_w_q, chi_m_w_q, F_d_loc, F_m_loc, chi0_w_q,  q_grid_loc, n_kpoints, n_kpoints, new_mu, irrbz, kdim, sigma_dga)
+    sigma_dga_q = sde.Hubbard_Holstein_SDE(dga_cfg, v_d_w_q, v_m_w_q, A_d,A_m, chi_d_w_q, chi_m_w_q, F_d_loc, F_m_loc, chi0_w_q,  q_grid_loc, n_kpoints, n_kpoints, new_mu, sigma_dga)
 
     if(rank==0):
         old_mu=new_mu*1

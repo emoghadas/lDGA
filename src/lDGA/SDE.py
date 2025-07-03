@@ -33,15 +33,17 @@ def Hubbard_SDE(dga_cfg:DGA_ConfigType, gamma_d:np.ndarray, gamma_m:np.ndarray, 
     return self_energy
 
 # Lattice Swinger-Dyson for the Hubbard-Holstein model
-def Hubbard_Holstein_SDE(dga_cfg:DGA_ConfigType, gamma_d:np.ndarray, gamma_m:np.ndarray, A_d:np.ndarray, A_m:np.ndarray, chi_d_w_q:np.ndarray, chi_m_w_q:np.ndarray, F_d_loc:np.array, F_m_loc:np.array, chi0_nu_w_q:np.ndarray, qpoints:np.ndarray, Nk:int, Nqtot:int, mu:np.float64, irrbz:bool, dim:int=2, self_dga:np.ndarray=None):
+def Hubbard_Holstein_SDE(dga_cfg:DGA_ConfigType, gamma_d:np.ndarray, gamma_m:np.ndarray, A_d:np.ndarray, A_m:np.ndarray, chi_d_w_q:np.ndarray, chi_m_w_q:np.ndarray, F_d_loc:np.array, F_m_loc:np.array, chi0_nu_w_q:np.ndarray, qpoints:np.ndarray, Nk:int, Nqtot:int, mu:np.float64, self_dga:np.ndarray=None):
 
     #Here we also sum Fock term
-    u=dga_cfg.U; beta=dga_cfg.beta
+    u=dga_cfg.U; beta=dga_cfg.beta;
     g0=dga_cfg.g0; omega0=dga_cfg.w0
     n4iwf=dga_cfg.n4iwf; n4iwb=dga_cfg.n4iwb
     self_old=dga_cfg.s_imp
     g_old=dga_cfg.g_imp
     dens=dga_cfg.occ_imp
+    dim = dga_cfg.kdim
+    irrbz = dga_cfg.irrbz
     Nq    = chi_d_w_q.shape[1]
 
     self_energy = np.zeros( (2*n4iwf,Nk), dtype=np.complex128)

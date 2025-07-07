@@ -2,13 +2,13 @@ import numpy as np
 from lDGA.utilities import ik2k, k2ik, G_wq_given_nuk, G_wq_given_nuk_irr, Udyn_arr, G_w_given_nu, U_trans, Udyn, build_nu_mats, build_w_mats,Udyn_arr
 from numba import jit
 from numba.experimental import jitclass
-from config import DGA_ConfigType
+from lDGA.config import DGA_ConfigType
 from mpi4py import MPI
 
 
 # Lattice Swinger-Dyson for the Hubbard model
 #TODO: CHECK FOR POSSIBLE BUGS AT LEAST ON SELF_SUM_U
-def Hubbard_SDE(dga_cfg:DGA_ConfigType, gamma_d:np.ndarray, gamma_m:np.ndarray, chi_d_w_q:np.ndarray, chi_m_w_q:np.ndarray, F_d_loc:np.array, F_m_loc:np.array, chi0_nu_w_q:np.ndarray, self_old:np.ndarray, dens:np.float64, qpoints:np.ndarray, Nk:int, mu:np.float64, dim:int=2, self_dga:np.ndarray=None):
+def Hubbard_SDE(dga_cfg:DGA_ConfigType, gamma_d:np.ndarray, gamma_m:np.ndarray, chi_d_w_q:np.ndarray, chi_m_w_q:np.ndarray, F_d_loc:np.array, F_m_loc:np.array, chi0_nu_w_q:np.ndarray, self_old:np.ndarray, dens:np.float64, qpoints:np.ndarray, Nk:int, mu:np.float64, dim:int=2, self_dga:np.ndarray=None) -> np.ndarray:
     u=dga_cfg.U; beta=dga_cfg.beta
     n4iwf=dga_cfg.n4iwf; n4iwb=dga_cfg.n4iwb
     _ , Nq = chi_d_w_q.shape
@@ -33,18 +33,23 @@ def Hubbard_SDE(dga_cfg:DGA_ConfigType, gamma_d:np.ndarray, gamma_m:np.ndarray, 
     return self_energy
 
 # Lattice Swinger-Dyson for the Hubbard-Holstein model
-def Hubbard_Holstein_SDE(dga_cfg:DGA_ConfigType, gamma_d:np.ndarray, gamma_m:np.ndarray, A_d:np.ndarray, A_m:np.ndarray, chi_d_w_q:np.ndarray, chi_m_w_q:np.ndarray, F_d_loc:np.array, F_m_loc:np.array, chi0_nu_w_q:np.ndarray, qpoints:np.ndarray, Nk:int, Nqtot:int, mu:np.float64, self_dga:np.ndarray=None):
-
+def Hubbard_Holstein_SDE(dga_cfg:DGA_ConfigType, gamma_d:np.ndarray, gamma_m:np.ndarray, A_d:np.ndarray, A_m:np.ndarray, chi_d_w_q:np.ndarray, chi_m_w_q:np.ndarray, chi0_nu_w_q:np.ndarray, mu:np.float64, self_dga:np.ndarray=None) -> np.ndarray:
     #Here we also sum Fock term
-    u=dga_cfg.U; beta=dga_cfg.beta;
+
+    u=dga_cfg.U; beta=dga_cfg.beta; dens=dga_cfg.occ_imp
     g0=dga_cfg.g0; omega0=dga_cfg.w0
+    ts=dga_cfg.ts
     n4iwf=dga_cfg.n4iwf; n4iwb=dga_cfg.n4iwb
     self_old=dga_cfg.s_imp
     g_old=dga_cfg.g_imp
-    dens=dga_cfg.occ_imp
+    F_d_loc = dga_cfg.F_d_loc
+    F_m_loc = dga_cfg.F_m_loc
     dim = dga_cfg.kdim
     irrbz = dga_cfg.irrbz
-    Nq    = chi_d_w_q.shape[1]
+    qpoints = dga_cfg.q_grid_loc
+    Nk = dga_cfg.n_kpoints
+    Nqtot = dga_cfg.n_qpoints_fullbz
+    Nq = chi_d_w_q.shape[1]
 
     self_energy = np.zeros( (2*n4iwf,Nk), dtype=np.complex128)
 
@@ -81,9 +86,9 @@ def Hubbard_Holstein_SDE(dga_cfg:DGA_ConfigType, gamma_d:np.ndarray, gamma_m:np.
     #Here also Fock term
     #N.B. now working only for a local self-energy, for SC-DGA to be corrected for a k-dependent one
     if irrbz:
-        self_energy = self_sum_Uw_irr(self_old, g_old, theta_nu_wq, omega0, g0, beta, qpoints, Nk, Nqtot, dim, mu, mpi_rank,self_dga)
+        self_energy = self_sum_Uw_irr(self_old, g_old, theta_nu_wq, omega0, g0, beta, qpoints, Nk, Nqtot, dim, mu, mpi_rank, ts, self_dga)
     else:
-        self_energy = self_sum_Uw(self_old, g_old, theta_nu_wq, omega0, g0, beta, qpoints, Nk, Nqtot, dim, mu, mpi_rank,self_dga)
+        self_energy = self_sum_Uw(self_old, g_old, theta_nu_wq, omega0, g0, beta, qpoints, Nk, Nqtot, dim, mu, mpi_rank, ts, self_dga)
     
     #Hartree term
     #Hartree only on the master node
@@ -94,7 +99,7 @@ def Hubbard_Holstein_SDE(dga_cfg:DGA_ConfigType, gamma_d:np.ndarray, gamma_m:np.
 
 #internal auxiliary routine
 @jit(nopython=True)
-def self_sum_Uw(self_old:np.ndarray, g_old:np.ndarray, theta:np.ndarray,  omega0:np.float64, g0:np.float64, beta:np.float64, qpoints:np.ndarray,  Nk:int,  Nqtot:int, dim:int , mu:np.float64, mpi_rank:int, self_dga:np.ndarray=None,ts:np.ndarray=None) -> np.ndarray:
+def self_sum_Uw(self_old:np.ndarray, g_old:np.ndarray, theta:np.ndarray,  omega0:np.float64, g0:np.float64, beta:np.float64, qpoints:np.ndarray,  Nk:int,  Nqtot:int, dim:int , mu:np.float64, mpi_rank:int, ts:np.ndarray, self_dga:np.ndarray=None) -> np.ndarray:
     n4iwf,n4iwb,Nqloc = theta.shape
     n4iwf//=2; n4iwb=n4iwb//2
     niwf = g_old.shape[0] //2
@@ -105,9 +110,9 @@ def self_sum_Uw(self_old:np.ndarray, g_old:np.ndarray, theta:np.ndarray,  omega0
         nu=(np.pi/beta)*(2*inu+1)
         for ik in range(Nk):
             k = ik2k(ik,dim,int(Nk**(1/dim)))
-            self_en[inu+n4iwf,ik] +=(0.5/beta)*np.sum( theta[inu+n4iwf,:,:] * G_wq_given_nuk(nu,k,self_old,n4iwb,qpoints,beta,mu,self_dga,ts=ts))/Nqtot #vertex term
+            self_en[inu+n4iwf,ik] +=(0.5/beta)*np.sum( theta[inu+n4iwf,:,:] * G_wq_given_nuk(nu,k,self_old,n4iwb,qpoints,beta,mu,ts,self_dga))/Nqtot #vertex term
             if( (g0!=0.0) and (not self_dga is None) ):
-                self_en[inu+n4iwf,ik] -= np.sum(G_wq_given_nuk(nu,k,self_old,n4iwb,qpoints,beta,mu,self_dga,ts=ts)*Udyn_arr(build_w_mats(n4iwb,beta),omega0,g0).reshape(2*n4iwb+1,1))/beta/Nqtot
+                self_en[inu+n4iwf,ik] -= np.sum(G_wq_given_nuk(nu,k,self_old,n4iwb,qpoints,beta,mu,ts,self_dga)*Udyn_arr(build_w_mats(n4iwb,beta),omega0,g0).reshape(2*n4iwb+1,1))/beta/Nqtot
         if( (g0!=0.0 and mpi_rank==0) and ( self_dga is None) ):
             for inup in range(-niwf,niwf):
                 nup=(np.pi/beta)*(2*inup+1)
@@ -117,7 +122,7 @@ def self_sum_Uw(self_old:np.ndarray, g_old:np.ndarray, theta:np.ndarray,  omega0
 
 #internal auxiliary routine
 @jit(nopython=True)
-def self_sum_Uw_irr(self_old:np.ndarray, g_old:np.ndarray, theta:np.ndarray,  omega0:np.float64, g0:np.float64, beta:np.float64, qpoints:np.ndarray,  Nk:int,  Nqtot:int, dim:int , mu:np.float64, mpi_rank:int, self_dga:np.ndarray=None) -> np.ndarray:
+def self_sum_Uw_irr(self_old:np.ndarray, g_old:np.ndarray, theta:np.ndarray,  omega0:np.float64, g0:np.float64, beta:np.float64, qpoints:np.ndarray,  Nk:int,  Nqtot:int, dim:int , mu:np.float64, mpi_rank:int, ts:np.ndarray, self_dga:np.ndarray=None) -> np.ndarray:
     n4iwf,n4iwb,Nqloc = theta.shape
     n4iwf//=2; n4iwb=n4iwb//2
     niwf = g_old.shape[0] //2
@@ -129,9 +134,9 @@ def self_sum_Uw_irr(self_old:np.ndarray, g_old:np.ndarray, theta:np.ndarray,  om
             nu=(np.pi/beta)*(2*inu+1)
             for ik in range(Nk):
                 k = ik2k(ik,dim,int(Nk**(1/dim)))
-                self_en[inu+n4iwf,ik] +=(0.5/beta)*np.sum( theta[inu+n4iwf,:,:] * G_wq_given_nuk_irr(nu,k,self_old,n4iwb,qpoints,beta,mu,self_dga)[:,:,i_sym])/Nqtot #vertex term
+                self_en[inu+n4iwf,ik] +=(0.5/beta)*np.sum( theta[inu+n4iwf,:,:] * G_wq_given_nuk_irr(nu,k,self_old,n4iwb,qpoints,beta,mu,ts,self_dga)[:,:,i_sym])/Nqtot #vertex term
                 if( (g0!=0.0) and (not self_dga is None) ):
-                    self_en[inu+n4iwf,ik] -= np.sum(G_wq_given_nuk_irr(nu,k,self_old,n4iwb,qpoints,beta,mu,self_dga)[:,:,i_sym]*Udyn_arr(build_w_mats(n4iwb,beta),omega0,g0).reshape(2*n4iwb+1,1))/beta/Nqtot
+                    self_en[inu+n4iwf,ik] -= np.sum(G_wq_given_nuk_irr(nu,k,self_old,n4iwb,qpoints,beta,mu,ts,self_dga)[:,:,i_sym]*Udyn_arr(build_w_mats(n4iwb,beta),omega0,g0).reshape(2*n4iwb+1,1))/beta/Nqtot
             if( (g0!=0.0 and mpi_rank==0) and ( self_dga is None) and (i_sym==0)):
                 for inup in range(-niwf,niwf):
                     nup=(np.pi/beta)*(2*inup+1)
@@ -159,7 +164,7 @@ def self_sum_U(self_old:np.array, theta:np.ndarray, U:np.float64, beta:np.float6
 ###################################### ONLY FOR LOCAL TESTS PURPOSES ###########################################
 #
 # Local Swinger-Dyson for the Hubbard-Holstein model
-def Hubbard_Holstein_SDE_loc(u:np.float64, g0:np.float64, omega0:np.float64, beta:np.float64, gamma_d:np.ndarray, gamma_m:np.ndarray,  A_d:np.ndarray, A_m:np.ndarray, chi_d_w:np.ndarray, chi_m_w:np.ndarray, F_d_loc:np.ndarray, F_m_loc:np.ndarray, chi0_nu_w:np.ndarray, g_old:np.ndarray, dens:np.float64, mu:np.float64):
+def Hubbard_Holstein_SDE_loc(u:np.float64, g0:np.float64, omega0:np.float64, beta:np.float64, gamma_d:np.ndarray, gamma_m:np.ndarray,  A_d:np.ndarray, A_m:np.ndarray, chi_d_w:np.ndarray, chi_m_w:np.ndarray, F_d_loc:np.ndarray, F_m_loc:np.ndarray, chi0_nu_w:np.ndarray, g_old:np.ndarray, dens:np.float64, mu:np.float64) -> np.ndarray:
     n4iwf = F_d_loc.shape[0]//2
     n4iwb = chi_d_w.shape[0]//2
     self_energy = np.zeros( (2*n4iwf), dtype=np.complex128)
@@ -207,7 +212,7 @@ def Hubbard_Holstein_SDE_loc(u:np.float64, g0:np.float64, omega0:np.float64, bet
     return self_energy, self_energy2
 
 # Local Swinger-Dyson for the Hubbard model
-def Hubbard_SDE_loc(u:np.float64, beta:np.float64, gamma_d:np.ndarray, gamma_m:np.ndarray, chi_d_w:np.ndarray, chi_m_w:np.ndarray, F_d_loc:np.ndarray, F_m_loc:np.ndarray, chi0_nu_w:np.ndarray, g_old:np.ndarray, dens:np.float64, mu:np.float64):
+def Hubbard_SDE_loc(u:np.float64, beta:np.float64, gamma_d:np.ndarray, gamma_m:np.ndarray, chi_d_w:np.ndarray, chi_m_w:np.ndarray, F_d_loc:np.ndarray, F_m_loc:np.ndarray, chi0_nu_w:np.ndarray, g_old:np.ndarray, dens:np.float64, mu:np.float64) -> np.ndarray:
     n4iwf = F_d_loc.shape[0]//2
     n4iwb = chi_d_w.shape[0]//2
 

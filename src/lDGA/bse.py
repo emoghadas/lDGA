@@ -1,6 +1,6 @@
 import numpy as np
 from numba import jit
-from numba.experimental import jitclass
+from typing import Tuple
 from lDGA.config import DGA_ConfigType
 from lDGA.utilities import k2ik, build_nu_mats, build_w_mats, U_trans, Udyn_arr, G_wq_given_nuk, ek_2d
 #from ._fast_bubble import ek_3d, calc_bubble, calc_bubble_gl
@@ -15,35 +15,6 @@ def asymp_chi(nu, beta) -> np.float64:
     summ = np.sum(1/(2*np.arange(nu//2)+1)**2)
     return 2*beta*(1/8. - summ/np.pi**2)
 
-@jit(nopython=True)
-def chi0_w_q(dga_cfg : DGA_ConfigType , mu:np.float64, k_grid:np.ndarray, qpoints: np.ndarray, s_dga:np.ndarray=None) -> np.ndarray:
-    '''
-    Compute lattice bubble chi0 for all iw and range of q-points
-    '''
-    beta=dga_cfg.beta; s_dmft=dga_cfg.s_imp
-    n4iwf=dga_cfg.n4iwf;  n4iwb=dga_cfg.n4iwb
-    ts=dga_cfg.ts
-    nk = k_grid.shape[0]
-    niwf  = s_dmft.shape[0]//2
-    chi0_wq = np.zeros((2*n4iwf,2*n4iwb+1,qpoints.shape[0]), dtype=np.complex128)
-
-    if(ts is None):
-        t1=1.0; t2=0.0
-    else:
-        t1=ts[0]; t2=ts[1]
-    
-
-    nu_array=build_nu_mats(n4iwf, beta)
-    for inu,nu in enumerate(nu_array):
-        for ik,k in enumerate(k_grid):
-            G_nuw_kq = G_wq_given_nuk(nu,k,s_dmft,n4iwb,qpoints,beta,mu, s_dga)
-            if(s_dga is None):
-                G_nu_k = 1.0/(1j*nu - ek_2d(k,t=t1,tpr=t2) + mu - s_dmft[inu-n4iwf+niwf] )
-            else:
-                G_nu_k = 1.0/(1j*nu - ek_2d(k, t=t1,tpr=t2) + mu - s_dga[inu,ik] )
-            chi0_wq[inu,:,:] += G_nu_k*G_nuw_kq
-    chi0_wq *= -beta/nk
-    return chi0_wq
 
 @jit(nopython=True)
 def chi0_loc_w(dga_cfg : DGA_ConfigType ) -> np.ndarray:
@@ -70,12 +41,13 @@ def chi0_loc_w(dga_cfg : DGA_ConfigType ) -> np.ndarray:
 
 
 @jit(nopython=True)
-def F_r_loc(dga_cfg : DGA_ConfigType, chi0_w:np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+def F_r_loc(dga_cfg : DGA_ConfigType) -> Tuple[np.ndarray, np.ndarray]:
     '''
     Compute local vertex F for all iw
     '''
     beta = dga_cfg.beta; chi=dga_cfg.chi_ph
     n4iwf=dga_cfg.n4iwf; n4iwb=dga_cfg.n4iwb
+    chi0_w = dga_cfg.chi0_w
 
     chi_m = chi[0,...] - chi[1,...]
     chi_d = chi[0,...] + chi[1,...]
@@ -91,10 +63,52 @@ def F_r_loc(dga_cfg : DGA_ConfigType, chi0_w:np.ndarray) -> tuple[np.ndarray, np
 
     return F_d_w, F_m_w
 
+# TODO: implement different asymptotics here in case of bare U
+def chi_r_loc(dga_cfg:DGA_ConfigType) -> Tuple[np.ndarray, np.ndarray]:
+    beta = dga_cfg.beta
+    n4iwf = dga_cfg.n4iwf
+    chi = dga_cfg.chi_ph
+    
+    chi_d_loc = chi[0,...]+chi[1,...]
+    chi_d_loc = np.sum(chi_d_loc, axis=(0,1))/beta**2 + asymp_chi(2*n4iwf, beta) #Tails correction are important to have Re[chi_loc]>0
+    chi_m_loc = chi[0,...]-chi[1,...]
+    chi_m_loc = np.sum(chi_m_loc, axis=(0,1))/beta**2 + asymp_chi(2*n4iwf, beta) #Tails correction are important to have Re[chi_loc]>0    
+
+    return chi_d_loc, chi_m_loc
+
 
 @jit(nopython=True)
-def chi_v_r_w_q(dga_cfg:DGA_ConfigType , chi0_w:np.ndarray, chi0_w_q:np.ndarray, qpoints:np.ndarray) \
-         -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]: # chi_d, gamma_d, A,  chi_m, gamma_m, A
+def chi0_w_q(dga_cfg : DGA_ConfigType , mu:np.float64, s_dga:np.ndarray=None) -> np.ndarray:
+    '''
+    Compute lattice bubble chi0 for all iw and range of q-points
+    '''
+    beta=dga_cfg.beta; s_dmft=dga_cfg.s_imp
+    n4iwf=dga_cfg.n4iwf;  n4iwb=dga_cfg.n4iwb
+    ts=dga_cfg.ts
+    t1=ts[0]
+    t2=ts[1]
+    k_grid = dga_cfg.k_grid
+    nk = k_grid.shape[0]
+    qpoints = dga_cfg.q_grid_loc
+    niwf  = s_dmft.shape[0]//2
+    chi0_wq = np.zeros((2*n4iwf,2*n4iwb+1,qpoints.shape[0]), dtype=np.complex128)
+
+    nu_array=build_nu_mats(n4iwf, beta)
+    for inu,nu in enumerate(nu_array):
+        for ik,k in enumerate(k_grid):
+            G_nuw_kq = G_wq_given_nuk(nu,k,s_dmft,n4iwb,qpoints,beta,mu,ts,s_dga)
+            if(s_dga is None):
+                G_nu_k = 1.0/(1j*nu - ek_2d(k,t=t1,tpr=t2) + mu - s_dmft[inu-n4iwf+niwf] )
+            else:
+                G_nu_k = 1.0/(1j*nu - ek_2d(k, t=t1,tpr=t2) + mu - s_dga[inu,ik] )
+            chi0_wq[inu,:,:] += G_nu_k*G_nuw_kq
+    chi0_wq *= -beta/nk
+    return chi0_wq
+
+
+@jit(nopython=True)
+def chi_v_r_w_q(dga_cfg:DGA_ConfigType , chi0_w_q:np.ndarray) \
+         -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]: # chi_d, gamma_d, A,  chi_m, gamma_m, A
     '''
     Compute physical susceptibility and three leg vertex of the lattice for all iw and given q-points
     '''
@@ -102,6 +116,8 @@ def chi_v_r_w_q(dga_cfg:DGA_ConfigType , chi0_w:np.ndarray, chi0_w_q:np.ndarray,
     omega0=dga_cfg.w0; g0=dga_cfg.g0
     n4iwf=dga_cfg.n4iwf; n4iwb=dga_cfg.n4iwb
     chi=dga_cfg.chi_ph
+    chi0_w = dga_cfg.chi0_w
+    qpoints = dga_cfg.q_grid_loc
     
     chi_d = chi[0,...] + chi[1,...]
     chi_m = chi[0,...] - chi[1,...]

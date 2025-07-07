@@ -7,6 +7,7 @@ import numpy as np
 import h5py
 from datetime import datetime
 import lDGA.config as cfg
+from lDGA.config import DGA_ConfigType
 from lDGA.dmft_reader import read_dmft_config
 import lDGA.bse as bse
 import lDGA.utilities as util
@@ -17,229 +18,139 @@ import sys
 import scipy.optimize as scop
 import matplotlib.pyplot as plt
 
-
-filenum=1 # 0 is Hubb only - 1 is Hubb-Hol -2 is Hubb-Hol many freq
-match filenum:
-    case 0:
-        dmft_file = "../../example/Hubb/g0_n0_95_2p-2025-04-18-Fri-01-08-44.hdf5"
-    case 1:
-        dmft_file = "../../example/gsq0_0_w1_n0_95_2p-2025-03-22-Sat-17-25-49.hdf5"
-    case 2:
-        dmft_file = "../../example/gsq0_0_w1_n0_95_2p-2025-04-14-Mon-16-49-08.hdf5"
-    case default:
-        raise ValueError(f"Wrong filenum={filenum}")
+def load_config() -> str:
+    # Use first argument if provided, else default to ./dga.toml
+    config_path = sys.argv[1] if len(sys.argv) > 1 else "dga.toml"
+    
+    if not os.path.exists(config_path):
+        raise FileNotFoundError(f"Config file not found: {config_path}")
+    
+    return config_path
 
 
-toml_file="dga.toml"
+def distribute_qpoints(dga_cfg:DGA_ConfigType, size, rank) -> None:
+    # assign q points to each process
+    nq_per_process = dga_cfg.n_qpoints // size
+    remainder = dga_cfg.n_qpoints % size
+    start_idx = rank * nq_per_process + min(rank, remainder)
+    end_idx = start_idx + nq_per_process + (1 if rank < remainder else 0)
+    q_range = slice(int(start_idx), int(end_idx))
+    q_grid_loc = dga_cfg.q_grid[q_range,:]
+    dga_cfg.q_grid_loc = q_grid_loc
+    return q_range
+    
+def main():
+    # read config file
+    toml_file = load_config()
+    dga_cfg = read_dmft_config(toml_file)
 
-dga_cfg = read_dmft_config(dmft_file, toml_file)
- #dga_cfg = cfg.DGA_Config(dmft_file)
- #reader = dmft_reader.DMFT_Reader(dga_cfg)
+    # get impurity quantities
+    g = dga_cfg.g_imp
+    s = dga_cfg.s_imp
+    chi = dga_cfg.chi_ph
+    beta = dga_cfg.beta
+    mu = dga_cfg.mu_imp
+    u = dga_cfg.U
+    n = dga_cfg.occ_imp
+    w0 = dga_cfg.w0
+    g0 = dga_cfg.g0
+    niwf = dga_cfg.niwf
+    n4iwf = dga_cfg.n4iwf
+    n4iwb = dga_cfg.n4iwb
 
-beta = np.float64(dga_cfg.beta)
+    # get DGA configs
+    max_iter = dga_cfg.max_iter
+    lambda_type = dga_cfg.lambda_type
+    file_name = dga_cfg.file_name
 
-g = dga_cfg.g_imp
-s = dga_cfg.s_imp
-chi = dga_cfg.chi_ph
+    # init mpi communicator and get number of processes and ranks
+    comm = MPI.COMM_WORLD
+    rank = comm.Get_rank()
+    size = comm.Get_size()
 
-mu = dga_cfg.mu_imp
-u = dga_cfg.U
-n = dga_cfg.occ_imp
-niwf = dga_cfg.niwf
-n4iwf = dga_cfg.n4iwf
-n4iwb = dga_cfg.n4iwb
-kdim = dga_cfg.kdim
-irrbz = dga_cfg.irrbz
-nq = dga_cfg.nq
-if irrbz:
-    n_qpoints = int(nq*(nq+1)/2)
-    nk = 2*nq-2
-    dga_cfg.nk = nk
-else:
-    n_qpoints = nq**kdim
+    if rank==0:
+        print("\n")
+        print("**************************************")
+        print(f"Starting Hubbard-Holstein DGA calculation ...")
+        print(f" Here U={u} - g0={g0} - w0={w0}")
+        print(f"Size of frequencies:")
+        print(f"niwf: {niwf} - n4iwf: {n4iwf} - n4iwb: {n4iwb}")
+        lambda_ph = 2*g0**2/w0
+        print("lambda_ph:", lambda_ph)
+        print(f"n={n} - mu={mu} - beta={beta}")
+        print("Hopping amplitudes:")
+        print("ts:", dga_cfg.ts)
+        print("**************************************")
+        sys.stdout.flush()
+
+    
+    if rank==0:
+        print("\n")
+        print("Initializing momentum grids ...")
+        sys.stdout.flush()
+
+    # initialize lattice
+    dga_cfg.init_lattice()
+    util.create_kgrid(dga_cfg)
+    util.create_qgrid(dga_cfg)
+
+    # get lattice information
+    kdim = dga_cfg.kdim
+    irrbz = dga_cfg.irrbz
+    nq = dga_cfg.nq
     nk = dga_cfg.nk
-max_iter = dga_cfg.max_iter
-w0 = dga_cfg.w0
-g0 = dga_cfg.g0
-lambda_type = dga_cfg.lambda_type
-file_name = dga_cfg.file_name
+    n_kpoints = dga_cfg.n_kpoints
+    n_qpoints = dga_cfg.n_qpoints
+    n_qpoints_fullbz = dga_cfg.n_qpoints_fullbz
 
-now_obj = datetime.now()
-now = now_obj.strftime("%Y-%m-%d_%H:%M:%S")
+    k_grid = dga_cfg.k_grid
+    q_grid = dga_cfg.q_grid
+    weights = dga_cfg.weights
 
-match filenum:
-    case 0:
-        w0 = 1.0
-        g0 = 0.0
-    case 1:
-        w0 = 1.0
-        g0 = 0.1**0.5 
-    case 2:
-        w0 = 1.0
-        g0 = 0.1**0.5
-    case default:
-        raise ValueError(f"Wrong filenum={filenum}")
-dga_cfg.g0 = g0
-dga_cfg.w0 = w0
+    # get current time
+    now_obj = datetime.now()
+    now = now_obj.strftime("%Y-%m-%d_%H:%M:%S")
 
-comm = MPI.COMM_WORLD
-rank = comm.Get_rank()
-size = comm.Get_size()
+    # distribute q points across different processes
+    q_range = distribute_qpoints(dga_cfg, size, rank)
+    q_grid_loc = dga_cfg.q_grid_loc
 
-if(rank==0):
-    print("**************************************")
-    print("Doing Hubbard-Holstein calculation...")
-    print(f" Here U={u} - g0={g0} - w0={w0}")
-    print(f"Size of frequencies:")
-    print(f"niwf: {niwf} - n4iwf: {n4iwf} - n4iwb: {n4iwb}")
-    lambda_ph = 2*g0**2/w0
-    print("lambda_ph:", lambda_ph)
-    print(f"n={n} - mu={mu} - beta={beta}")
-    print("**************************************")
-    print("Hopping amplitudes:")
-    print("ts:", dga_cfg.ts)
+    comm.Barrier()
+    if rank==0:
+        print("Calculate local quantities ... ")
+        sys.stdout.flush()
 
+    # local bubble, reducible vertex F and physical susceptibility on each process
+    dga_cfg.chi0_w = bse.chi0_loc_w(dga_cfg)
+    #chi0_w = dga_cfg.chi0_w
 
-# TODO: move this to separate function
-q = np.linspace(0, np.pi, nq, endpoint=True)
-if irrbz:
-    if kdim!=2:
-        raise ValueError("Irreducible BZ summation only implemented for d=2")
-    q_grid, weights = util.irr_q_grid(q)
-else:
-    if kdim==2:
-        q_grid = np.meshgrid(q,q)
-        q_grid = np.array(q_grid).reshape(2,-1).T
-    elif kdim==3:
-        q_grid = np.meshgrid(q,q,q)
-        q_grid = np.array(q_grid).reshape(3,-1).T
-    else:
-        raise ValueError("Number of dimension cannot exceed 3")
-    weights = np.ones(q_grid.shape[0], dtype=np.complex128)
+    F_d_loc, F_m_loc = bse.F_r_loc(dga_cfg)
+    dga_cfg.F_d_loc = F_d_loc
+    dga_cfg.F_m_loc = F_m_loc
 
-# assign q points to each process
-nq_per_process = n_qpoints // size
-remainder = n_qpoints % size
-start_idx = rank * nq_per_process + min(rank, remainder)
-end_idx = start_idx + nq_per_process + (1 if rank < remainder else 0)
-q_range = slice(int(start_idx), int(end_idx))
-q_grid_loc = q_grid[q_range,:]
+    chi_d_loc, chi_m_loc = bse.chi_r_loc(dga_cfg)
+    dga_cfg.chi_d_loc = chi_d_loc
+    dga_cfg.chi_m_loc = chi_m_loc
 
-print("Calculate local bubble - rank:",rank)
-sys.stdout.flush()
+    if rank==0:
+        print("Calculate lattice bubble ...")
+        sys.stdout.flush()
 
-# local bubble on each process
-chi0_w = bse.chi0_loc_w(dga_cfg)
+    # lattice bubble for each processes' q-points
+    chi0_w_q = bse.chi0_w_q(dga_cfg, mu)
 
-# kgrid has to be initialized beforehand
-kpoints = np.linspace(-np.pi, np.pi, nk, endpoint=False)
-k_grid = np.meshgrid(kpoints, kpoints)
-k_grid = np.array(k_grid).reshape(2,-1).T
-n_kpoints = nk**kdim
-print(n_kpoints)
+    if rank==0:
+        print("Calculate lattice susceptibility and hedin vertex ...")
+        sys.stdout.flush()
 
-print("Calculate lattice bubble - rank:",rank)
-sys.stdout.flush()
+    # compute chi and v
+    chi_d_w_q, v_d_w_q, A_d, chi_m_w_q, v_m_w_q, A_m = bse.chi_v_r_w_q(dga_cfg, chi0_w_q)
 
-# lattice bubble for each processes' q-points
-chi0_w_q = bse.chi0_w_q(dga_cfg, mu, k_grid, q_grid_loc)
+    if rank==0:
+        print("Calculate chi_r_latt for lambda corrections ...")
+        sys.stdout.flush()
 
-print("Calculate lattice susceptibility and hedin vertex - rank:",rank)
-sys.stdout.flush()
-
-# compute chi and v
-chi_d_w_q, v_d_w_q, A_d, chi_m_w_q, v_m_w_q ,A_m = bse.chi_v_r_w_q(dga_cfg, chi0_w, chi0_w_q, q_grid_loc)
-
-print("Calculate chi_d/m_latt for lambda corrections - rank:",rank)
-sys.stdout.flush()
-
-# lambda corrections
-chi_d_q_full = np.zeros([2*n4iwb+1, n_qpoints], dtype=np.complex128)
-chi_d_q_full[:,q_range] = chi_d_w_q
-chi_m_q_full = np.zeros([2*n4iwb+1, n_qpoints], dtype=np.complex128)
-chi_m_q_full[:,q_range] = chi_m_w_q
-
-
-chi_d_latt = np.zeros_like(chi_d_q_full) if rank==0 else None
-chi_m_latt = np.zeros_like(chi_d_q_full) if rank==0 else None
-
-comm.Reduce(chi_d_q_full, chi_d_latt, op=MPI.SUM, root=0)
-comm.Reduce(chi_m_q_full, chi_m_latt, op=MPI.SUM, root=0)
-
-lambda_m = np.zeros((n4iwb*2+1,1))
-lambda_d = np.zeros((n4iwb*2+1,1))
-if rank==0:
-    print("Lambda Correction of type:", lambda_type)
-    chi_d_loc = chi[0,...]+chi[1,...]
-    chi_d_loc = np.sum(chi_d_loc, axis=(0,1))/beta**2 + bse.asymp_chi(2*n4iwf, beta) #Tails correction are important to have Re[chi_loc]>0
-    chi_m_loc = chi[0,...]-chi[1,...]
-    chi_m_loc = np.sum(chi_m_loc, axis=(0,1))/beta**2 + bse.asymp_chi(2*n4iwf, beta) #Tails correction are important to have Re[chi_loc]>0
-    lambda_d0, lambda_m0 = lamb.lambda_correction(lambda_type,beta,chi_d_latt,chi_m_latt,chi_d_loc,chi_m_loc, weights)
-    lambda_d[:,0] = lambda_d0
-    lambda_m[:,0] = lambda_m0
-
-
-
-lambda_d = comm.bcast(lambda_d, root=0)
-lambda_m = comm.bcast(lambda_m, root=0)
-
-
-# correct susceptibilities on each process
-chi_d_w_q = chi_d_w_q / (1 + lambda_d*chi_d_w_q)
-chi_m_w_q = chi_m_w_q / (1 + lambda_m*chi_m_w_q)
-
-
-print("Calculate SDE for selfenergy")
-sys.stdout.flush()
-
-# sde for selfenergy
-F_d_loc, F_m_loc = bse.F_r_loc(dga_cfg, chi0_w)
-sigma_dga_q = sde.Hubbard_Holstein_SDE(dga_cfg, v_d_w_q, v_m_w_q, A_d,A_m, chi_d_w_q, chi_m_w_q, F_d_loc, F_m_loc, chi0_w_q, q_grid_loc, n_kpoints, n_kpoints, mu)
-
-if(max_iter==1):
-    sigma_dga = np.zeros_like(sigma_dga_q,dtype=np.complex128) if rank==0 else None
-    comm.Reduce(sigma_dga_q, sigma_dga, op=MPI.SUM, root=0)
-else:
-    sigma_dga = np.zeros_like(sigma_dga_q,dtype=np.complex128)
-    comm.Allreduce(sigma_dga_q,sigma_dga,op=MPI.SUM)
-
-#Computing new mu
-new_mu=0.0
-if(rank==0):
-    new_mu = util.get_mu( mu, n, sigma_dga, k_grid, beta )
-new_mu = comm.bcast(new_mu, root=0)
-
-
-if(rank==0):
-    fsave = h5py.File(f'{file_name}_{now}.h5','a')
-    group = fsave.create_group('config')
-    group.create_dataset('max_iter',data=max_iter)
-    group.create_dataset('beta',data=beta)
-    group.create_dataset('dens',data=n)
-    group.create_dataset('u',data=u)
-    group.create_dataset('w0',data=w0)
-    group.create_dataset('g0',data=g0)
-    group = fsave.create_group('iter_0')
-    group.create_dataset('sigma',data=sigma_dga)
-    group.create_dataset('lambda_d',data=lambda_d)
-    group.create_dataset('lambda_m',data=lambda_m)
-    group.create_dataset('chi_d_latt',data=chi_d_latt)
-    group.create_dataset('chi_m_latt',data=chi_m_latt)
-    group.create_dataset('mu',data=new_mu)
-
-
-# Loop for Self-Consistent lDGA
-for iter in range(1,max_iter):
-    print("")
-    print("")
-    print(f"***** Doing iter={iter} *****")
-
-
-    chi0_w_q = bse.chi0_w_q(dga_cfg, new_mu, k_grid, q_grid_loc, s_dga=sigma_dga)
-
-    chi_d_w_q, v_d_w_q, A_d, chi_m_w_q, v_m_w_q ,A_m = bse.chi_v_r_w_q(dga_cfg, chi0_w, chi0_w_q, q_grid_loc)
-
-    # store new chis in chi_r_latt
+    # lambda corrections
     chi_d_q_full = np.zeros([2*n4iwb+1, n_qpoints], dtype=np.complex128)
     chi_d_q_full[:,q_range] = chi_d_w_q
     chi_m_q_full = np.zeros([2*n4iwb+1, n_qpoints], dtype=np.complex128)
@@ -247,56 +158,145 @@ for iter in range(1,max_iter):
 
     chi_d_latt = np.zeros_like(chi_d_q_full) if rank==0 else None
     chi_m_latt = np.zeros_like(chi_d_q_full) if rank==0 else None
-    print(f"Process {rank}: ready to pass chi_lattice")
+
     comm.Reduce(chi_d_q_full, chi_d_latt, op=MPI.SUM, root=0)
     comm.Reduce(chi_m_q_full, chi_m_latt, op=MPI.SUM, root=0)
 
-    #TODO: LAMBDA DECAY PROCEDURE
-    lambda_d *= np.exp(-iter)
-    lambda_m *= np.exp(-iter)
+    lambda_m = np.zeros((n4iwb*2+1,1))
+    lambda_d = np.zeros((n4iwb*2+1,1))
 
-    chi_d_w_q = chi_d_w_q / (1.0 + lambda_d*chi_d_w_q)
-    chi_m_w_q = chi_m_w_q / (1.0 + lambda_m*chi_m_w_q)
+    if rank==0:
+        print("Doing lambda Correction of type:", lambda_type)
+        sys.stdout.flush()
+        lambda_d0, lambda_m0 = lamb.lambda_correction(dga_cfg, chi_d_latt, chi_m_latt)
+        lambda_d[:,0] = lambda_d0
+        lambda_m[:,0] = lambda_m0
 
-    sigma_dga_q = sde.Hubbard_Holstein_SDE(dga_cfg, v_d_w_q, v_m_w_q, A_d,A_m, chi_d_w_q, chi_m_w_q, F_d_loc, F_m_loc, chi0_w_q,  q_grid_loc, n_kpoints, n_kpoints, new_mu, sigma_dga)
+    lambda_d = comm.bcast(lambda_d, root=0)
+    lambda_m = comm.bcast(lambda_m, root=0)
 
-    if(rank==0):
-        old_mu=new_mu*1
-        old_sigma_dga = sigma_dga*1
+    # correct susceptibilities on each process
+    chi_d_w_q = chi_d_w_q / (1 + lambda_d*chi_d_w_q)
+    chi_m_w_q = chi_m_w_q / (1 + lambda_m*chi_m_w_q)
 
-    sigma_dga = np.zeros_like(sigma_dga_q)
-    comm.Allreduce(sigma_dga_q, sigma_dga, op=MPI.SUM)
+    if rank==0:
+        print("Calculate SDE for selfenergy")
+        sys.stdout.flush()
 
+    # sde for selfenergy
+    sigma_dga_q = sde.Hubbard_Holstein_SDE(dga_cfg, v_d_w_q, v_m_w_q, A_d,A_m, chi_d_w_q, chi_m_w_q, chi0_w_q, mu)
+
+    if(max_iter==1):
+        sigma_dga = np.zeros_like(sigma_dga_q,dtype=np.complex128) if rank==0 else None
+        comm.Reduce(sigma_dga_q, sigma_dga, op=MPI.SUM, root=0)
+    else:
+        sigma_dga = np.zeros_like(sigma_dga_q,dtype=np.complex128)
+        comm.Allreduce(sigma_dga_q,sigma_dga,op=MPI.SUM)
+
+    #Computing new mu
     new_mu=0.0
     if(rank==0):
-        new_mu = util.get_mu( mu, n, sigma_dga, k_grid, beta )
-        print("new_mu found:",new_mu)
+        new_mu = util.get_mu(dga_cfg, sigma_dga)
     new_mu = comm.bcast(new_mu, root=0)
 
-    convg=False
-
     if(rank==0):
-        error_sigma = np.linalg.norm( sigma_dga-old_sigma_dga )/np.linalg.norm( sigma_dga )
-        if error_sigma < 1e-3 :
-            convg=True
-    convg = comm.bcast(convg, root=0)
-
-
-    if(rank==0):
+        print("Saving data of lambda-corrected DGA ...")
+        sys.stdout.flush()
         fsave = h5py.File(f'{file_name}_{now}.h5','a')
-        group = fsave.create_group(f'iter_{iter}')
+        group = fsave.create_group('config')
+        group.create_dataset('max_iter',data=max_iter)
+        group.create_dataset('beta',data=beta)
+        group.create_dataset('dens',data=n)
+        group.create_dataset('u',data=u)
+        group.create_dataset('w0',data=w0)
+        group.create_dataset('g0',data=g0)
+        group = fsave.create_group('iter_0')
         group.create_dataset('sigma',data=sigma_dga)
         group.create_dataset('lambda_d',data=lambda_d)
         group.create_dataset('lambda_m',data=lambda_m)
         group.create_dataset('chi_d_latt',data=chi_d_latt)
         group.create_dataset('chi_m_latt',data=chi_m_latt)
         group.create_dataset('mu',data=new_mu)
-        group.create_dataset('convg',data=convg)
-    if(convg): break
-    
-if(rank==0):
-    fsave.close()
-    if max_iter>1:
-        print("After exiting convg=",convg)
-        print("error_sigma:",error_sigma)
-    print("Finished calculation")
+
+
+    # Loop for Self-Consistent lDGA
+    for iter in range(1,max_iter):
+        if rank==0:
+            print("")
+            print("")
+            print(f"***** Doing iter={iter} *****")
+            sys.stdout.flush()
+
+
+        chi0_w_q = bse.chi0_w_q(dga_cfg, new_mu, s_dga=sigma_dga)
+
+        chi_d_w_q, v_d_w_q, A_d, chi_m_w_q, v_m_w_q ,A_m = bse.chi_v_r_w_q(dga_cfg, chi0_w_q)
+
+        # store new chis in chi_r_latt
+        chi_d_q_full = np.zeros([2*n4iwb+1, n_qpoints], dtype=np.complex128)
+        chi_d_q_full[:,q_range] = chi_d_w_q
+        chi_m_q_full = np.zeros([2*n4iwb+1, n_qpoints], dtype=np.complex128)
+        chi_m_q_full[:,q_range] = chi_m_w_q
+
+        chi_d_latt = np.zeros_like(chi_d_q_full) if rank==0 else None
+        chi_m_latt = np.zeros_like(chi_d_q_full) if rank==0 else None
+        #print(f"Process {rank}: ready to pass chi_lattice")
+        comm.Reduce(chi_d_q_full, chi_d_latt, op=MPI.SUM, root=0)
+        comm.Reduce(chi_m_q_full, chi_m_latt, op=MPI.SUM, root=0)
+
+        #TODO: LAMBDA DECAY PROCEDURE
+        lambda_d *= np.exp(-iter)
+        lambda_m *= np.exp(-iter)
+
+        chi_d_w_q = chi_d_w_q / (1.0 + lambda_d*chi_d_w_q)
+        chi_m_w_q = chi_m_w_q / (1.0 + lambda_m*chi_m_w_q)
+
+        sigma_dga_q = sde.Hubbard_Holstein_SDE(dga_cfg, v_d_w_q, v_m_w_q, A_d,A_m, chi_d_w_q, chi_m_w_q, chi0_w_q, new_mu, sigma_dga)
+
+        if(rank==0):
+            old_mu=new_mu*1
+            old_sigma_dga = sigma_dga*1
+
+        sigma_dga = np.zeros_like(sigma_dga_q)
+        comm.Allreduce(sigma_dga_q, sigma_dga, op=MPI.SUM)
+
+        new_mu=0.0
+        if(rank==0):
+            new_mu = util.get_mu(dga_cfg, sigma_dga)
+            print("New mu found:", new_mu)
+            sys.stdout.flush()
+        new_mu = comm.bcast(new_mu, root=0)
+
+        convg=False
+
+        if(rank==0):
+            error_sigma = np.linalg.norm( sigma_dga-old_sigma_dga )/np.linalg.norm( sigma_dga )
+            if error_sigma < 1e-3 :
+                convg=True
+        convg = comm.bcast(convg, root=0)
+
+        if(rank==0):
+            print(f"Saving data of iteration {iter}")
+            sys.stdout.flush()
+            fsave = h5py.File(f'{file_name}_{now}.h5','a')
+            group = fsave.create_group(f'iter_{iter}')
+            group.create_dataset('sigma',data=sigma_dga)
+            group.create_dataset('lambda_d',data=lambda_d)
+            group.create_dataset('lambda_m',data=lambda_m)
+            group.create_dataset('chi_d_latt',data=chi_d_latt)
+            group.create_dataset('chi_m_latt',data=chi_m_latt)
+            group.create_dataset('mu',data=new_mu)
+            group.create_dataset('convg',data=convg)
+        if(convg): break
+        
+    if(rank==0):
+        fsave.close()
+        if max_iter>1:
+            print("After exiting convg=",convg)
+            print("error_sigma:",error_sigma)
+            sys.stdout.flush()
+        print("Finished calculation")
+        sys.stdout.flush()
+
+if __name__ == "__main__":
+    main()

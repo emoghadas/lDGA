@@ -1,6 +1,8 @@
 import numpy as np
 from scipy.optimize import root
 from numba import jit
+from typing import Tuple
+from lDGA.config import DGA_ConfigType
 
 ##### LATTICE UTILITIES #####
 
@@ -23,7 +25,7 @@ def k2ik(k:np.ndarray, Nk:int) -> int:
     return int(ik)
 
 @jit(nopython=True)
-def wrap_k(k):
+def wrap_k(k:np.ndarray) -> np.ndarray:
     for i in range(len(k)):
         while k[i] < -np.pi:
             k[i] += 2 * np.pi
@@ -32,7 +34,7 @@ def wrap_k(k):
     return k
 
 @jit(nopython=True)
-def irr_q_grid(qpoints):
+def irr_q_grid(qpoints:np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     nq = len(qpoints)
 
     q_grid = []
@@ -57,7 +59,7 @@ def irr_q_grid(qpoints):
     return q_grid, weights
 
 @jit(nopython=True)
-def ek_2d(k:np.ndarray, t:float=0.25, tpr:float=0, tsec:float=0) -> np.float64:
+def ek_2d(k:np.ndarray, t:np.float64=0.25, tpr:np.float64=0., tsec:np.float64=0.) -> np.float64:
     '''
     return 2d sqaured lattice Hamiltonian evaluated at give k-point
     '''
@@ -69,7 +71,40 @@ def ek_2d(k:np.ndarray, t:float=0.25, tpr:float=0, tsec:float=0) -> np.float64:
                - 2*tsec*(np.cos(2*kx)+np.cos(2*ky))
     return ek
 
-# DYNAMICAL UTILS
+# this must not be jit compiled
+def k_grid(nk:np.int64, kdim:np.int64) -> np.ndarray:
+    kpoints = np.linspace(-np.pi, np.pi, nk, endpoint=False)
+    if kdim==2:
+        k_grid = np.meshgrid(kpoints, kpoints)  
+        k_grid = np.array(k_grid).reshape(2,-1).T
+    elif kdim==3:
+        k_grid = np.meshgrid(kpoints, kpoints, kpoints)
+        k_grid = np.array(k_grid).reshape(3,-1).T
+    else:
+        raise ValueError("Number of dimension cannot exceed 3")
+    return k_grid
+
+# this must not be jit compiled
+def create_kgrid(dga_cfg:DGA_ConfigType) -> None:
+    dga_cfg.k_grid = k_grid(dga_cfg.nk, dga_cfg.kdim)
+    return
+
+# this must not be jit compiled
+def create_qgrid(dga_cfg:DGA_ConfigType) -> None:
+    # create q_grid
+    if dga_cfg.irrbz:
+        q = np.linspace(0, np.pi, dga_cfg.nq, endpoint=True)
+        if dga_cfg.kdim!=2:
+            raise ValueError("Irreducible BZ summation only implemented for d=2")
+        q_grid, weights = irr_q_grid(q)
+    else:
+        q_grid = k_grid(dga_cfg.nq, dga_cfg.kdim)
+        weights = np.ones(q_grid.shape[0], dtype=np.complex128)
+    dga_cfg.q_grid = q_grid
+    dga_cfg.weights = weights
+    return
+
+##### DYNAMICAL UTILS ######
 @jit(nopython=True)
 def inu2nu(inu:int, beta:np.float64) -> np.float64:
     return np.pi*(2.0*inu + 1.0)/beta
@@ -108,16 +143,14 @@ def build_nu_mats(Nnu:int, beta:np.float64) -> np.ndarray:
 #N.B. this works only for DMFT self-energy with enough frequencies.
 # Auxiliary function for Swinger-Dyson Equations
 @jit(nopython=True)
-def G_wq_given_nuk(nu:np.float64, k:np.ndarray, sigma:np.ndarray, n4iwb:int, qpoints:np.ndarray, beta:np.float64, mu:np.float64, sigma_dga:np.ndarray=None,ts=None )-> np.ndarray:
+def G_wq_given_nuk(nu:np.float64, k:np.ndarray, sigma:np.ndarray, n4iwb:int, qpoints:np.ndarray, beta:np.float64, mu:np.float64, ts:np.ndarray, sigma_dga:np.ndarray=None)-> np.ndarray:
     dim = len(k); inu=nu2inu(nu, beta)
     Nq, dimq = qpoints.shape
     Gres = np.zeros( (2*n4iwb+1,Nq), dtype=np.complex128 )
     niwf = sigma.shape[0]//2
     n4iwf = 0
-    if(ts is None):
-        t1=1.0; t2=0.0
-    else:
-        t1=ts[0]; t2=ts[1]
+    t1=ts[0]
+    t2=ts[1]
 
     if(not(sigma_dga is None)):
         Nk = sigma_dga.shape[1]
@@ -159,16 +192,14 @@ def generate_sym(q: np.ndarray) -> np.ndarray:
 
 
 @jit(nopython=True)
-def G_wq_given_nuk_irr(nu:np.float64, k:np.ndarray, sigma:np.ndarray, n4iwb:int, qpoints:np.ndarray, beta:np.float64, mu:np.float64, sigma_dga:np.ndarray=None,ts=None )-> np.ndarray:
+def G_wq_given_nuk_irr(nu:np.float64, k:np.ndarray, sigma:np.ndarray, n4iwb:int, qpoints:np.ndarray, beta:np.float64, mu:np.float64, ts:np.ndarray, sigma_dga:np.ndarray=None)-> np.ndarray:
     dim = len(k); inu=nu2inu(nu, beta)
     Nq, dimq = qpoints.shape
     Gres = np.zeros( (2*n4iwb+1,Nq,8), dtype=np.complex128 )
     niwf = sigma.shape[0]//2
     n4iwf = 0
-    if(ts is None):
-        t1=1.0; t2=0.0
-    else:
-        t1=ts[0]; t2=ts[1]
+    t1=ts[0]
+    t2=ts[1]
 
     if(not(sigma_dga is None)):
         Nk = sigma_dga.shape[1]
@@ -214,14 +245,20 @@ def G_w_given_nu(nu:np.float64, g_loc:np.ndarray, Nw:int, beta:np.float64)-> np.
 
 # MU SEARCH
 @jit(nopython=True)
-def mu_root(mu:np.float64,n_target:np.float64, sigma_dga:np.ndarray, eps_kgrid:np.ndarray, beta:np.float64):
+def mu_root(mu:np.float64,n_target:np.float64, sigma_dga:np.ndarray, eps_kgrid:np.ndarray, beta:np.float64) -> np.complex128:
     Nk = eps_kgrid.shape[0]; n4iwf = sigma_dga.shape[0]//2
     nu_array=build_nu_mats(n4iwf,beta).reshape(2*n4iwf,1)
     return n_target - (1.0/Nk/beta)*np.sum(  1.0/( 1j*nu_array +mu - eps_kgrid.reshape(1,Nk) -sigma_dga  ) - 1.0/(1j*nu_array ) ).real -0.5
 
 
-def get_mu( mu_start:np.float64, n_target:np.float64, sigma_dga:np.ndarray, k_grid:np.ndarray, beta:np.float64,ts=None ):
+def get_mu(dga_cfg:DGA_ConfigType, sigma_dga:np.ndarray) -> np.float64:
     print("Searching for new chemical potential...")
+    mu_start = dga_cfg.mu_imp
+    n_target = dga_cfg.occ_imp
+    beta = dga_cfg.beta
+    k_grid = dga_cfg.k_grid
+    ts = dga_cfg.ts    
+
     eps_kgrid=np.zeros(k_grid.shape[0])
     if(ts is None):
         t1=1.0; t2=0.0
@@ -232,7 +269,7 @@ def get_mu( mu_start:np.float64, n_target:np.float64, sigma_dga:np.ndarray, k_gr
     root_sol = root(mu_root,args=(n_target,sigma_dga,eps_kgrid,beta),x0=mu_start,method="lm",tol=1e-10)
     mu_sol = root_sol.x[0]
     if(root_sol.success):
-        print("After ",root_sol.nfev," function evaluations, the root is found to be ",mu_sol)
+        print("After ",root_sol.nfev," function evaluations, the root is found to be ", mu_sol)
     else:
-        print("Root finding did not converge. The best estimate is ",mu_sol)
+        print("Root finding did not converge. The best estimate is ", mu_sol)
     return mu_sol

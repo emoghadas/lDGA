@@ -10,6 +10,13 @@ dga_config_spec = [
     ('kdim', nb.int64),
     ('nk', nb.int64),
     ('nq', nb.int64),
+    ('n_kpoints', nb.int64),
+    ('n_qpoints', nb.int64),
+    ('n_qpoints_fullbz', nb.int64),
+    ('k_grid', nb.float64[:,:]),
+    ('q_grid', nb.float64[:,:]),
+    ('q_grid_loc', nb.float64[:,:]),
+    ('weights', nb.complex128[:]),
     ('irrbz', nb.boolean),
     ('niwf', nb.int64),
     ('n4iwf', nb.int64),
@@ -40,7 +47,12 @@ dga_config_spec = [
                                # or if you use nb.optional(nb.complex128[:])
     ('s_imp', nb.complex128[:]),
     ('chi_ph', nb.complex128[:,:,:,:]),
-    ('ts', nb.complex128[:]),
+    ('chi0_w', nb.complex128[:,:]),
+    ('F_d_loc', nb.complex128[:,:,:]),
+    ('F_m_loc', nb.complex128[:,:,:]),
+    ('chi_d_loc', nb.complex128[:]),
+    ('chi_m_loc', nb.complex128[:]),
+    ('ts', nb.float64[:]),
 ]
 
 
@@ -96,6 +108,18 @@ class DGA_Config:
         self.s_imp = s_imp
         self.chi_ph = chi_ph
         self.ts = ts
+
+    def init_lattice(self):
+        # get correct number of kpoints for q and k grid
+        if self.irrbz:
+            self.n_qpoints = np.int64(self.nq * (self.nq + 1) / 2)
+            self.nk = 2 * self.nq - 2
+            self.n_qpoints_fullbz = self.nk**self.kdim
+        else:
+            self.n_qpoints_fullbz = self.nq**self.kdim
+            self.n_qpoints = self.n_qpoints_fullbz
+        self.n_kpoints = self.nk**self.kdim
+
 
 #Instance important to pass to function
 DGA_ConfigType = DGA_Config.class_type.instance_type

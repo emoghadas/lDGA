@@ -1,18 +1,33 @@
 # dmft_reader.py
 # dmft_reader.py
 import h5py as h5
-import toml
-#import tomllib
+import tomllib
 import numpy as np
-from typing import Tuple # For type hinting if needed, though not strictly used in return
-import os # For path handling
 from lDGA.config import DGA_Config 
 
-def read_dmft_config(hdf5_dmftfile_path: str, toml_dgafile_path:str) -> DGA_Config:
+def read_dmft_config(toml_dgafile_path:str) -> DGA_Config:
     """
     Reads DMFT data from an HDF5 file and creates a fully populated
     DGA_Config jitclass object.
     """
+
+    # Reading the TOML config file of DGA
+    with open(toml_dgafile_path, 'rb') as f:
+        toml_config = tomllib.load(f)
+    
+    g02 = get_config_value(toml_config,"phonons.g0", default=0.1)
+    w0 = get_config_value(toml_config,"phonons.w0", default=1.0)
+    max_iter = get_config_value(toml_config, "dga.max_iter", default=1)
+    file_name = get_config_value(toml_config, "dga.file_name", default="result")
+    lambda_type = get_config_value(toml_config, "dga.lambda_type", default="Pauli")
+    lambda_decay = get_config_value(toml_config, "dga.lambda_decay", default=1)
+    ts = np.float64(get_config_value(toml_config, "lattice.ts", default=np.array([1.0,0.0])))
+    irrbz = get_config_value(toml_config, "lattice.irrbz", default=False)
+    nk = get_config_value(toml_config, "lattice.nk", default=4)
+    nq = get_config_value(toml_config, "lattice.nq", default=4)
+
+    hdf5_dmftfile_path = get_config_value(toml_config, "dga.dmft_input", default="input.hdf5")
+
     # Initialize variables that will be passed to DGA_Config
     # Set sensible defaults or ensure they will be overwritten by HDF5 data
     beta = 0.0
@@ -22,8 +37,7 @@ def read_dmft_config(hdf5_dmftfile_path: str, toml_dgafile_path:str) -> DGA_Conf
     niwf = 0
     n4iwf = 0
     n4iwb = 0
-    w0 = 1.0 # Default from DGA_Config, can be overridden if in HDF5
-    g0 = 0.1**0.5 # Default from DGA_Config, can be overridden if in HDF5
+    g0 = g02**0.5 # Default from DGA_Config, can be overridden if in HDF5
     
     # Placeholder for mandatory arrays (will be filled from HDF5)
     g_imp_data = None
@@ -33,9 +47,9 @@ def read_dmft_config(hdf5_dmftfile_path: str, toml_dgafile_path:str) -> DGA_Conf
     try:
         with h5.File(hdf5_dmftfile_path, 'r') as f:
             # Read general info
-            beta = float(f['.config'].attrs['general.beta'])
-            U = float(f['.config'].attrs['atoms.1.udd'])
-            mu_imp = float(f['.config'].attrs['general.mu'])
+            beta = np.float64(f['.config'].attrs['general.beta'])
+            U = np.float64(f['.config'].attrs['atoms.1.udd'])
+            mu_imp = np.float64(f['.config'].attrs['general.mu'])
             
             occ = f['stat-last/ineq-001/occ/value'][()]
             occ_imp = float((occ[:,0,:,0] + occ[:,1,:,1])[0,0]/2)
@@ -87,23 +101,6 @@ def read_dmft_config(hdf5_dmftfile_path: str, toml_dgafile_path:str) -> DGA_Conf
         print(f"An unexpected error occurred during HDF5 loading from '{hdf5_dmftfile_path}': {e}")
         raise
 
-    # Reading the TOML config file of DGA
-    with open(toml_dgafile_path, 'r') as f:
-        toml_config = toml.load(f)
-    
-    ts = np.complex128(get_config_value(toml_config, "lattice.ts", default=np.array([1.0,0.0])))
-    g0 = get_config_value(toml_config,"phonons.g0", default=0.1**0.5)
-    w0 = get_config_value(toml_config,"phonons.w0", default=1.0)
-    max_iter = get_config_value(toml_config, "dga.max_iter", default=1)
-    file_name = get_config_value(toml_config, "dga.file_name", default="result")
-    lambda_type = get_config_value(toml_config, "dga.lambda_type", default="Pauli")
-    lambda_decay = get_config_value(toml_config, "dga.lambda_decay", default=1)
-    irrbz = get_config_value(toml_config, "lattice.irrbz", default=False)
-    nk = get_config_value(toml_config, "lattice.nk", default=4)
-    nq = get_config_value(toml_config, "lattice.nq", default=4)
-    test = toml_config.get("test", "Hello World")
-    print("Read toml: ", test)
-
     # Construct and return the DGA_Config instance with all loaded data
     # All mandatory arguments (hdf5_file_path, g_imp_data, s_imp_data, chi_ph_data) are provided.
     # Other arguments can use their defaults from DGA_Config's __init__
@@ -134,7 +131,6 @@ def read_dmft_config(hdf5_dmftfile_path: str, toml_dgafile_path:str) -> DGA_Conf
         file_name = file_name,
         lambda_type = lambda_type,
         lambda_decay = lambda_decay
-
     )
 
 

@@ -39,3 +39,7 @@ dependencies = [
 # Optional dependencies required to run the tests or build the documentation. Can be installed by
 # specifying the key in brackets: `mypackage[tests,docs]`.
 tests = ["pytest", "pytest-cov"]
+
+
+[project.scripts]
+dga = "lDGA.lDGA_SC:main"

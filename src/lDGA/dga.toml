@@ -1,4 +1,5 @@
 [dga]
+	dmft_input="input.hdf5"
 	max_iter=1
 	file_name="res"
 	lambda_type="Pauli"
@@ -11,6 +12,6 @@
 	nq = 8
 	
 [phonons]
-	g0 = 0.5
+	g02 = 0.1
 	w0 = 1.0
 

@@ -15,7 +15,7 @@ def read_dmft_config(toml_dgafile_path:str) -> DGA_Config:
     with open(toml_dgafile_path, 'rb') as f:
         toml_config = tomllib.load(f)
     
-    g02 = get_config_value(toml_config,"phonons.g0", default=0.1)
+    g02 = get_config_value(toml_config,"phonons.g02", default=0.1)
     w0 = get_config_value(toml_config,"phonons.w0", default=1.0)
     max_iter = get_config_value(toml_config, "dga.max_iter", default=1)
     file_name = get_config_value(toml_config, "dga.file_name", default="result")

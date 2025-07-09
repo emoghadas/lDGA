@@ -27,6 +27,7 @@ def read_dmft_config(toml_dgafile_path:str) -> DGA_Config:
     nq = get_config_value(toml_config, "lattice.nq", default=4)
 
     hdf5_dmftfile_path = get_config_value(toml_config, "dga.dmft_input", default="input.hdf5")
+    worm = get_config_value(toml_config, "dga.dmft_worm", default=False)
 
     # Initialize variables that will be passed to DGA_Config
     # Set sensible defaults or ensure they will be overwritten by HDF5 data
@@ -51,7 +52,10 @@ def read_dmft_config(toml_dgafile_path:str) -> DGA_Config:
             U = np.float64(f['.config'].attrs['atoms.1.udd'])
             mu_imp = np.float64(f['.config'].attrs['general.mu'])
             
-            occ = f['stat-last/ineq-001/occ/value'][()]
+            if worm:
+                occ = f['worm-last/ineq-001/occ/value'][()]    
+            else:
+                occ = f['stat-last/ineq-001/occ/value'][()]
             occ_imp = float((occ[:,0,:,0] + occ[:,1,:,1])[0,0]/2)
 
             # Read frequency infos
@@ -66,19 +70,39 @@ def read_dmft_config(toml_dgafile_path:str) -> DGA_Config:
             # g0 = 0.1**0.5 
 
             # Read Green's function
-            giw = f['stat-last/ineq-001/giw/value'][0,0,:] * 0.5
-            giw += f['stat-last/ineq-001/giw/value'][0,1,:] * 0.5
+            if worm:
+                giw = f['worm-last/ineq-001/glocnew/value'][0,0,:] * 0.5
+                giw += f['worm-last/ineq-001/glocnew/value'][0,1,:] * 0.5
+            else:
+                giw = f['stat-last/ineq-001/giw/value'][0,0,:] * 0.5
+                giw += f['stat-last/ineq-001/giw/value'][0,1,:] * 0.5
             g_imp_data = giw.astype(np.complex128)
 
             # Read Selfenergy
-            siw = f['stat-last/ineq-001/siw/value'][0,0,:] * 0.5
-            siw += f['stat-last/ineq-001/siw/value'][0,1,:] * 0.5
+            if worm:
+                g0iw = f['worm-last/ineq-001/g0iw/value'][()]
+                giw_full = f['worm-last/ineq-001/glocnew/value'][()]
+                shape = g0iw.shape
+                siw_full = np.empty(shape, dtype=complex)
+                for i in range(shape[0]):
+                    for j in range(shape[1]):
+                        siw_full[i,j,:] = 1/g0iw[i,j,:] - 1/giw_full[i,j,:]
+                siw = 0.5*(siw_full[0,0,:] + siw_full[0,1,:]) 
+            else:
+                siw = f['stat-last/ineq-001/siw/value'][0,0,:] * 0.5
+                siw += f['stat-last/ineq-001/siw/value'][0,1,:] * 0.5
             s_imp_data = siw.astype(np.complex128)
 
             # Read 2p-GF
-            g4iw = f['stat-last/ineq-001/g4iw/value'][()]
-            g4iw_uu = 0.5*(g4iw[0,0,0,0,...] + g4iw[0,1,0,1,...])
-            g4iw_ud = 0.5*(g4iw[0,0,0,1,...] + g4iw[0,1,0,0,...])
+            if worm:
+                g4iw_uu = 0.5 * f['worm-last/ineq-001/g4iw-worm/00001/value'][()]
+                g4iw_uu += 0.5 * f['worm-last/ineq-001/g4iw-worm/00016/value'][()]
+                g4iw_ud = 0.5 * f['worm-last/ineq-001/g4iw-worm/00004/value'][()]
+                g4iw_ud += 0.5 * f['worm-last/ineq-001/g4iw-worm/00013/value'][()]
+            else:
+                g4iw = f['stat-last/ineq-001/g4iw/value'][()]
+                g4iw_uu = 0.5*(g4iw[0,0,0,0,...] + g4iw[0,1,0,1,...])
+                g4iw_ud = 0.5*(g4iw[0,0,0,1,...] + g4iw[0,1,0,0,...])
             
             g4iw_sym_shape = (2,) + g4iw_uu.shape
             g4iw_sym = np.empty(g4iw_sym_shape, dtype=np.complex128)

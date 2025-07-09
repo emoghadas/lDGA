@@ -21,6 +21,12 @@ def read_dmft_config(toml_dgafile_path:str) -> DGA_Config:
     file_name = get_config_value(toml_config, "dga.file_name", default="result")
     lambda_type = get_config_value(toml_config, "dga.lambda_type", default="Pauli")
     lambda_decay = get_config_value(toml_config, "dga.lambda_decay", default=1)
+    asymp = get_config_value(toml_config, "dga.asymp", default='bubble')
+    # check if chosen asymptotics is supported
+    asymp_types = ['bubble', 'bare-u']
+    if asymp not in asymp_types:
+        raise ValueError(f"No implementation for specified asymptotics method: {asymp}")
+    nouter = get_config_value(toml_config, "dga.nouter", default=300)
     ts = np.float64(get_config_value(toml_config, "lattice.ts", default=np.array([1.0,0.0])))
     irrbz = get_config_value(toml_config, "lattice.irrbz", default=False)
     nk = get_config_value(toml_config, "lattice.nk", default=4)
@@ -154,7 +160,9 @@ def read_dmft_config(toml_dgafile_path:str) -> DGA_Config:
         max_iter = max_iter,
         file_name = file_name,
         lambda_type = lambda_type,
-        lambda_decay = lambda_decay
+        lambda_decay = lambda_decay,
+        asymp = asymp,
+        nouter = nouter
     )
 
 

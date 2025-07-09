@@ -31,6 +31,8 @@ dga_config_spec = [
     ('U', nb.float64),
     ('mu_imp', nb.float64),
     ('occ_imp', nb.float64),
+    ('asymp', nb.types.string),
+    ('nouter', nb.int64),
     # --- Handling np.ndarray ---
     # For a NumPy array, you need to specify:
     # 1. Element type (e.g., nb.complex128 for complex numbers, nb.float64 for floats)
@@ -48,8 +50,11 @@ dga_config_spec = [
     ('s_imp', nb.complex128[:]),
     ('chi_ph', nb.complex128[:,:,:,:]),
     ('chi0_w', nb.complex128[:,:]),
+    ('chi0_w_full', nb.complex128[:,:]),
     ('F_d_loc', nb.complex128[:,:,:]),
     ('F_m_loc', nb.complex128[:,:,:]),
+    ('gamma_d', nb.complex128[:,:,:]),
+    ('gamma_m', nb.complex128[:,:,:]),
     ('chi_d_loc', nb.complex128[:]),
     ('chi_m_loc', nb.complex128[:]),
     ('ts', nb.float64[:]),
@@ -74,6 +79,7 @@ class DGA_Config:
                 file_name: str = "results",
                 kdim: int = 2, nk: int = 4, nq: int = 4, irrbz: bool = True,
                 niwf: int = 1000, n4iwf: int = 100, n4iwb: int = 100,
+                asymp: str = 'bubble', nouter: int = 300,
                 max_iter: int = 1, lambda_decay: int = 1, lambda_type: str = "Pauli",
                 use_mpi: bool = True,
                 beta: float = 1000.0, g0: float = 0.0, w0: float = 1.0, U: float = 0.0,
@@ -91,6 +97,9 @@ class DGA_Config:
         self.niwf = niwf
         self.n4iwf = n4iwf
         self.n4iwb = n4iwb
+        # asymptotics
+        self.asymp = asymp
+        self.nouter = nouter
         # Self-Consistency and Lambda correction parameters
         self.max_iter = max_iter
         self.lambda_decay = lambda_decay

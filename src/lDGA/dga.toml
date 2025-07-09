@@ -1,6 +1,8 @@
 [dga]
 	dmft_input="input.hdf5"
 	max_iter=1
+	asymp = "bare-u" # ['bubble', 'bare-u']
+	nouter = 500
 	file_name="res"
 	lambda_type="Pauli"
 	lambda_decay=2

@@ -58,6 +58,10 @@ def main():
     n4iwf = dga_cfg.n4iwf
     n4iwb = dga_cfg.n4iwb
 
+    # asymptotics
+    asymp = dga_cfg.asymp
+    nouter = dga_cfg.nouter
+
     # get DGA configs
     max_iter = dga_cfg.max_iter
     lambda_type = dga_cfg.lambda_type
@@ -121,8 +125,11 @@ def main():
         sys.stdout.flush()
 
     # local bubble, reducible vertex F and physical susceptibility on each process
-    dga_cfg.chi0_w = bse.chi0_loc_w(dga_cfg)
-    #chi0_w = dga_cfg.chi0_w
+    if asymp=='bubble':
+        dga_cfg.chi0_w = bse.chi0_loc_w(dga_cfg)
+    else:
+        dga_cfg.chi0_w_full = bse.chi0_loc_w_full(dga_cfg)
+        dga_cfg.chi0_w = dga_cfg.chi0_w_full[nouter-n4iwf:nouter+n4iwf,:]
 
     F_d_loc, F_m_loc = bse.F_r_loc(dga_cfg)
     dga_cfg.F_d_loc = F_d_loc
@@ -131,6 +138,13 @@ def main():
     chi_d_loc, chi_m_loc = bse.chi_r_loc(dga_cfg)
     dga_cfg.chi_d_loc = chi_d_loc
     dga_cfg.chi_m_loc = chi_m_loc
+
+    if asymp=='bare-u':
+        if rank==0:
+            print("Computing irreducible vertex gamma_r from local BSE ...")
+        gamma_d, gamma_m = bse.gamma_w(dga_cfg)
+        dga_cfg.gamma_d = gamma_d
+        dga_cfg.gamma_m = gamma_m
 
     if rank==0:
         print("Calculate lattice bubble ...")
@@ -144,7 +158,10 @@ def main():
         sys.stdout.flush()
 
     # compute chi and v
-    chi_d_w_q, v_d_w_q, A_d, chi_m_w_q, v_m_w_q, A_m = bse.chi_v_r_w_q(dga_cfg, chi0_w_q)
+    if asymp=='bubble':
+        chi_d_w_q, v_d_w_q, A_d, chi_m_w_q, v_m_w_q, A_m = bse.chi_v_r_w_q(dga_cfg, chi0_w_q)
+    else:
+        chi_d_w_q, v_d_w_q, A_d, chi_m_w_q, v_m_w_q, A_m = bse.bse_asymp(dga_cfg, chi0_w_q)
 
     if rank==0:
         print("Calculate chi_r_latt for lambda corrections ...")
@@ -230,7 +247,11 @@ def main():
 
         chi0_w_q = bse.chi0_w_q(dga_cfg, new_mu, s_dga=sigma_dga)
 
-        chi_d_w_q, v_d_w_q, A_d, chi_m_w_q, v_m_w_q ,A_m = bse.chi_v_r_w_q(dga_cfg, chi0_w_q)
+        # compute chi and v
+        if asymp=='bubble':
+            chi_d_w_q, v_d_w_q, A_d, chi_m_w_q, v_m_w_q, A_m = bse.chi_v_r_w_q(dga_cfg, chi0_w_q)
+        else:
+            chi_d_w_q, v_d_w_q, A_d, chi_m_w_q, v_m_w_q, A_m = bse.bse_asymp(dga_cfg, chi0_w_q)
 
         # store new chis in chi_r_latt
         chi_d_q_full = np.zeros([2*n4iwb+1, n_qpoints], dtype=np.complex128)

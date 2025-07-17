@@ -59,6 +59,19 @@ def irr_q_grid(qpoints:np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     return q_grid, weights
 
 @jit(nopython=True)
+def irr2fullBZ(nq:np.int64, qpoints:np.ndarray, f_q:np.ndarray) -> np.ndarray:
+    nq_full = 2 * nq - 2
+    f_q_full = np.zeros(nq_full**2, dtype=np.complex128)
+
+    for i, (q, f_i) in enumerate(zip(qpoints, f_q)):
+        q_all = generate_sym(q)
+        for q_sym in q_all:
+            iq = k2ik(q_sym, nq_full)
+            f_q_full[iq] = f_i
+
+    return f_q_full
+
+@jit(nopython=True)
 def ek_2d(k:np.ndarray, t:np.float64=0.25, tpr:np.float64=0., tsec:np.float64=0.) -> np.float64:
     '''
     return 2d sqaured lattice Hamiltonian evaluated at give k-point

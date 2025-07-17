@@ -89,16 +89,49 @@ def F_r_loc(dga_cfg : DGA_ConfigType) -> Tuple[np.ndarray, np.ndarray]:
 
     return F_d_w, F_m_w
 
-# TODO: implement different asymptotics here in case of bare U
+@jit(nopython=True)
 def chi_r_loc(dga_cfg:DGA_ConfigType) -> Tuple[np.ndarray, np.ndarray]:
+    ''' compute local physical susceptibilities with bubble or bare-u asymptotics '''
     beta = dga_cfg.beta
+    u = dga_cfg.U
+    omega0 = dga_cfg.w0
+    g0 = dga_cfg.g0
     n4iwf = dga_cfg.n4iwf
+    n4iwb = dga_cfg.n4iwb
     chi = dga_cfg.chi_ph
-    
-    chi_d_loc = chi[0,...]+chi[1,...]
-    chi_d_loc = np.sum(chi_d_loc, axis=(0,1))/beta**2 + asymp_chi(2*n4iwf, beta) #Tails correction are important to have Re[chi_loc]>0
-    chi_m_loc = chi[0,...]-chi[1,...]
-    chi_m_loc = np.sum(chi_m_loc, axis=(0,1))/beta**2 + asymp_chi(2*n4iwf, beta) #Tails correction are important to have Re[chi_loc]>0    
+    chi0_w = dga_cfg.chi0_w_full
+    gamma_d = dga_cfg.gamma_d
+    gamma_m = dga_cfg.gamma_m
+    niwf = dga_cfg.nouter
+    asymp = dga_cfg.asymp
+
+    nu_inner = slice(niwf-n4iwf,niwf+n4iwf)
+    wmats  = build_w_mats(n4iwb,beta)
+
+    Uw = Udyn_arr(wmats,omega0,g0,u).astype(np.complex128)
+    u_d = 2*Uw - u
+    u_m = -u
+
+    chi_d_loc = np.empty((2*n4iwb+1), dtype=np.complex128)
+    chi_m_loc = np.empty((2*n4iwb+1), dtype=np.complex128)
+    if asymp=='bare-u':
+        for w_idx, iw in enumerate(range(-n4iwb, n4iwb+1)):
+            phi_d = np.linalg.inv(np.diag(1/chi0_w[nu_inner,w_idx]) + (gamma_d[:,:,w_idx]-u_d[w_idx]*np.ones((2*n4iwf,2*n4iwf), dtype=np.complex128))/beta**2)
+            phi_m = np.linalg.inv(np.diag(1/chi0_w[nu_inner,w_idx]) + (gamma_m[:,:,w_idx]-u_m*np.ones((2*n4iwf,2*n4iwf), dtype=np.complex128))/beta**2)
+
+            bub_sum = (np.sum(chi0_w[niwf+n4iwf:, w_idx]) + np.sum(chi0_w[:niwf-n4iwf, w_idx])) / beta**2
+
+            chi_d_loc[w_idx] = 1/(1/(np.sum(phi_d)/beta**2 + bub_sum) + u_d[w_idx]) + asymp_chi(2*n4iwf, beta)
+            chi_m_loc[w_idx] = 1/(1/(np.sum(phi_m)/beta**2 + bub_sum) + u_m) + asymp_chi(2*n4iwf, beta)    
+    else:
+        for w_idx, iw in enumerate(range(-n4iwb, n4iwb+1)):
+            chi_d_gen = chi[0,:,:,w_idx] + chi[1,:,:,w_idx]
+            chi_d_phys = np.sum(chi_d_gen)/beta**2 + asymp_chi(2*n4iwf, beta)
+            chi_d_loc[w_idx] = chi_d_phys
+
+            chi_m_gen = chi[0,:,:,w_idx] - chi[1,:,:,w_idx]
+            chi_m_phys = np.sum(chi_m_gen)/beta**2 + asymp_chi(2*n4iwf, beta)
+            chi_m_loc[w_idx] = chi_m_phys
 
     return chi_d_loc, chi_m_loc
 

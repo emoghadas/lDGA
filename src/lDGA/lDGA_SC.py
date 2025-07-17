@@ -131,6 +131,13 @@ def main():
         dga_cfg.chi0_w_full = bse.chi0_loc_w_full(dga_cfg)
         dga_cfg.chi0_w = dga_cfg.chi0_w_full[nouter-n4iwf:nouter+n4iwf,:]
 
+    if asymp=='bare-u':
+        if rank==0:
+            print("Computing irreducible vertex gamma_r from local BSE ...")
+        gamma_d, gamma_m = bse.gamma_w(dga_cfg)
+        dga_cfg.gamma_d = gamma_d
+        dga_cfg.gamma_m = gamma_m
+
     F_d_loc, F_m_loc = bse.F_r_loc(dga_cfg)
     dga_cfg.F_d_loc = F_d_loc
     dga_cfg.F_m_loc = F_m_loc
@@ -138,13 +145,6 @@ def main():
     chi_d_loc, chi_m_loc = bse.chi_r_loc(dga_cfg)
     dga_cfg.chi_d_loc = chi_d_loc
     dga_cfg.chi_m_loc = chi_m_loc
-
-    if asymp=='bare-u':
-        if rank==0:
-            print("Computing irreducible vertex gamma_r from local BSE ...")
-        gamma_d, gamma_m = bse.gamma_w(dga_cfg)
-        dga_cfg.gamma_d = gamma_d
-        dga_cfg.gamma_m = gamma_m
 
     if rank==0:
         print("Calculate lattice bubble ...")

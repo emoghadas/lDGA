@@ -129,21 +129,12 @@ def main():
         print("Calculate local quantities ... ")
         sys.stdout.flush()
 
-    #match asymp:
-    #    case 'bubble':
-    #        dga_cfg.chi0_w = bse.chi0_loc_w(dga_cfg)    
-    #    case 'bare-u':
-    #        dga_cfg.chi0_w_full = bse.chi0_loc_w_full(dga_cfg)    
-    #        dga_cfg.chi0_w = dga_cfg.chi0_w_full[nouter-n4iwf:nouter+n4iwf,:]
-    #    case 'dual':
-    #        dga_cfg.hedin = 
-
     # local bubble, reducible vertex F and physical susceptibility on each process
-    if asymp=='bubble':
-        dga_cfg.chi0_w = bse.chi0_loc_w(dga_cfg)
-    elif asymp=='bare-u':
+    if asymp=='bare-u':
         dga_cfg.chi0_w_full = bse.chi0_loc_w_full(dga_cfg)
         dga_cfg.chi0_w = dga_cfg.chi0_w_full[nouter-n4iwf:nouter+n4iwf,:]
+    else:
+        dga_cfg.chi0_w = bse.chi0_loc_w(dga_cfg)
 
     if asymp=='bare-u':
         if rank==0:
@@ -184,12 +175,6 @@ def main():
             chi_d_w_q, v_d_w_q, A_d, chi_m_w_q, v_m_w_q, A_m = bse.bse_asymp(dga_cfg, chi0_w_q)        
         case 'dual':
             chi_d_w_q, v_d_w_q, A_d, chi_m_w_q, v_m_w_q, A_m = bse.dual_bse(dga_cfg, chi0_w_q)
-
-    ## compute chi and v
-    #if asymp=='bubble':
-    #    chi_d_w_q, v_d_w_q, A_d, chi_m_w_q, v_m_w_q, A_m = bse.chi_v_r_w_q(dga_cfg, chi0_w_q)
-    #else:
-    #    chi_d_w_q, v_d_w_q, A_d, chi_m_w_q, v_m_w_q, A_m = bse.bse_asymp(dga_cfg, chi0_w_q)
 
     if rank==0:
         print("Calculate chi_r_latt for lambda corrections ...")

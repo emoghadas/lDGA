@@ -348,3 +348,98 @@ def bse_asymp(dga_cfg:DGA_ConfigType, chi0_w_q:np.ndarray) -> Tuple[np.ndarray, 
             A_m_w_q[:,w_idx,q_idx] = A_m_q
 
     return chi_d_w_q, v_d_w_q, A_d_w_q, chi_m_w_q, v_m_w_q, A_m_w_q
+
+
+@jit(nopython=True)
+def dual_bse(dga_cfg:DGA_ConfigType, chi0_w_q:np.ndarray):
+    ''' Calculates physical lattice susceptibility and lattice hedin vertex for fixed q and omega based on the dual-scheme'''
+    beta = dga_cfg.beta 
+    u = dga_cfg.U
+    omega0 = dga_cfg.w0
+    g0 = dga_cfg.g0
+    chi0_w = dga_cfg.chi0_w
+    n2iwb = dga_cfg.n3iwb
+    n3iwf = dga_cfg.n3iwf
+    n3iwb = dga_cfg.n3iwb
+    n4iwf = dga_cfg.n4iwf
+    n4iwb = dga_cfg.n4iwb
+    chi_d_loc = dga_cfg.chi_d_loc    
+    chi_m_loc = dga_cfg.chi_m_loc
+    p3ph = dga_cfg.p3ph
+    l3_d = p3ph[0,...] + p3ph[1,...]
+    l3_m = p3ph[0,...] - p3ph[1,...]
+    chi_ph = dga_cfg.chi_ph
+    chi_d = chi_ph[0,...] + chi_ph[1,...]
+    chi_m = chi_ph[0,...] - chi_ph[1,...]
+    F_d_loc = dga_cfg.F_d_loc
+    F_m_loc = dga_cfg.F_m_loc
+    qpoints = dga_cfg.q_grid_loc
+
+    numats = build_nu_mats(n4iwf,beta)
+    wmats  = build_w_mats(n4iwb,beta)
+
+    Uw = Udyn_arr(wmats,omega0,g0,u).astype(np.complex128)
+    Ununup = U_trans(nu=numats,nup=numats, omega0=omega0, g=g0, u=u).astype(np.complex128)
+
+    u_d = 2*Uw - u
+    u_m = -u
+
+    chi_d_w_q = np.empty((2*n4iwb+1, len(qpoints)), dtype=np.complex128)
+    chi_m_w_q = np.empty((2*n4iwb+1, len(qpoints)), dtype=np.complex128)
+    v_d_w_q = np.empty((2*n4iwf, 2*n4iwb+1, len(qpoints)), dtype=np.complex128)
+    v_m_w_q = np.empty((2*n4iwf, 2*n4iwb+1, len(qpoints)), dtype=np.complex128)
+    A_d_w_q = np.empty((2*n4iwf, 2*n4iwb+1, len(qpoints)), dtype=np.complex128)
+    A_m_w_q = np.empty((2*n4iwf, 2*n4iwb+1, len(qpoints)), dtype=np.complex128)
+    for q_idx, q in enumerate(qpoints):
+        for w_idx, iw in enumerate(range(-n4iwb, n4iwb+1)):
+            ##### dual bse #####
+
+            # nonlocal bubble
+            chi0_nl = chi0_w_q[:,w_idx,q_idx] - chi0_w[:,w_idx]
+
+            # nonlocal 4point
+            chi_nl_d = np.linalg.inv(np.linalg.inv(np.diag(chi0_nl)) + F_d_loc[...,w_idx]/beta**2)
+            chi_nl_m = np.linalg.inv(np.linalg.inv(np.diag(chi0_nl)) + F_m_loc[...,w_idx]/beta**2)
+
+            # include local chi
+            chi_d_q = chi_d_loc[w_idx] + l3_d[:,w_idx]@chi_nl_d@l3_d[:,w_idx]
+            chi_m_q = chi_m_loc[w_idx] + l3_m[:,w_idx]@chi_nl_m@l3_m[:,w_idx]
+            chi_d_w_q[w_idx, q_idx] = chi_d_q
+            chi_m_w_q[w_idx, q_idx] = chi_m_q
+
+            #### ladder equation for lattice hedin vertex ####
+            hedin_d = beta*l3_d/(1 - u_d[w_idx]*chi_d_loc[w_idx])
+            hedin_m = beta*l3_m/(1 - u_m*chi_m_loc[w_idx])
+
+            u_scr_d = u_d[w_idx] - (u_d[w_idx]**2*chi_d_loc[w_idx])
+            u_scr_m = u_m - (u_m**2*chi_m_loc[w_idx])
+
+            F_d_irr_loc = F_d_loc[...,w_idx] - u_scr_d * np.outer(hedin_d[:,w_idx], hedin_d[:,w_idx])
+            F_m_irr_loc = F_m_loc[...,w_idx] - u_scr_m * np.outer(hedin_m[:,w_idx], hedin_m[:,w_idx])
+
+            v_d = np.linalg.solve(np.eye(2*n4iwf) + F_d_irr_loc.T@np.diag(chi0_nl)/(beta**2), hedin_d[:,w_idx])
+            v_m = np.linalg.solve(np.eye(2*n4iwf) + F_m_irr_loc.T@np.diag(chi0_nl)/(beta**2), hedin_m[:,w_idx])  
+
+            v_d_w_q[:, w_idx, q_idx] = v_d 
+            v_m_w_q[:, w_idx, q_idx] = v_m 
+
+            # lattice polarization
+            F_d_q = np.linalg.inv(np.eye(2*n4iwf) + F_d_loc[...,w_idx]@np.diag(chi0_nl/beta)/beta)@F_d_loc[...,w_idx]
+            F_m_q = np.linalg.inv(np.eye(2*n4iwf) + F_m_loc[...,w_idx]@np.diag(chi0_nl/beta)/beta)@F_m_loc[...,w_idx]
+
+            u_scr_d_q = u_d[w_idx] - (u_d[w_idx]**2*chi_d_q)
+            u_scr_m_q = u_m - (u_m**2*chi_m_q)
+
+            F_d_irr_q = F_d_q - u_scr_d_q * np.outer(v_d, v_d)
+            F_m_irr_q = F_m_q - u_scr_m_q * np.outer(v_m, v_m)
+            phi_d = np.diag(chi0_w_q[:,w_idx,q_idx]) - np.diag(chi0_w_q[:,w_idx,q_idx])@F_d_irr_q@np.diag(chi0_w_q[:,w_idx,q_idx])/beta**2
+            phi_m = np.diag(chi0_w_q[:,w_idx,q_idx]) - np.diag(chi0_w_q[:,w_idx,q_idx])@F_m_irr_q@np.diag(chi0_w_q[:,w_idx,q_idx])/beta**2
+
+            # compute three-leg vertex A
+            A_d_q = (1/chi0_w_q[:,w_idx,q_idx])*np.diag(  phi_d @ Ununup )*beta
+            A_m_q = (1/chi0_w_q[:,w_idx,q_idx])*np.diag(  phi_m @ Ununup )*beta
+
+            A_d_w_q[:, w_idx, q_idx] = A_d_q
+            A_m_w_q[:, w_idx, q_idx] = A_m_q
+
+    return chi_d_w_q, v_d_w_q, A_d_w_q, chi_m_w_q, v_m_w_q, A_m_w_q

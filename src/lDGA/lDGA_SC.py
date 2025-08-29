@@ -47,6 +47,8 @@ def main():
     # get impurity quantities
     g = dga_cfg.g_imp
     s = dga_cfg.s_imp
+    chi_loc_w = dga_cfg.chi_loc_w
+    p3ph = dga_cfg.p3ph
     chi = dga_cfg.chi_ph
     beta = dga_cfg.beta
     mu = dga_cfg.mu_imp
@@ -55,6 +57,9 @@ def main():
     w0 = dga_cfg.w0
     g0 = dga_cfg.g0
     niwf = dga_cfg.niwf
+    n2iwb = dga_cfg.n2iwb
+    n3iwf = dga_cfg.n3iwf
+    n3iwb = dga_cfg.n3iwb
     n4iwf = dga_cfg.n4iwf
     n4iwb = dga_cfg.n4iwb
 
@@ -124,10 +129,19 @@ def main():
         print("Calculate local quantities ... ")
         sys.stdout.flush()
 
+    #match asymp:
+    #    case 'bubble':
+    #        dga_cfg.chi0_w = bse.chi0_loc_w(dga_cfg)    
+    #    case 'bare-u':
+    #        dga_cfg.chi0_w_full = bse.chi0_loc_w_full(dga_cfg)    
+    #        dga_cfg.chi0_w = dga_cfg.chi0_w_full[nouter-n4iwf:nouter+n4iwf,:]
+    #    case 'dual':
+    #        dga_cfg.hedin = 
+
     # local bubble, reducible vertex F and physical susceptibility on each process
     if asymp=='bubble':
         dga_cfg.chi0_w = bse.chi0_loc_w(dga_cfg)
-    else:
+    elif asymp=='bare-u':
         dga_cfg.chi0_w_full = bse.chi0_loc_w_full(dga_cfg)
         dga_cfg.chi0_w = dga_cfg.chi0_w_full[nouter-n4iwf:nouter+n4iwf,:]
 
@@ -142,9 +156,14 @@ def main():
     dga_cfg.F_d_loc = F_d_loc
     dga_cfg.F_m_loc = F_m_loc
 
-    chi_d_loc, chi_m_loc = bse.chi_r_loc(dga_cfg)
-    dga_cfg.chi_d_loc = chi_d_loc
-    dga_cfg.chi_m_loc = chi_m_loc
+    if asymp=='dual':
+        chi_loc = chi_loc_w[:,n2iwb-n4iwb:n2iwb+n4iwb+1]
+        dga_cfg.chi_d_loc = chi_loc[0,:] + chi_loc[1,:]
+        dga_cfg.chi_m_loc = chi_loc[0,:] - chi_loc[1,:]
+    else:
+        chi_d_loc, chi_m_loc = bse.chi_r_loc(dga_cfg)
+        dga_cfg.chi_d_loc = chi_d_loc
+        dga_cfg.chi_m_loc = chi_m_loc
 
     if rank==0:
         print("Calculate lattice bubble ...")
@@ -157,11 +176,20 @@ def main():
         print("Calculate lattice susceptibility and hedin vertex ...")
         sys.stdout.flush()
 
-    # compute chi and v
-    if asymp=='bubble':
-        chi_d_w_q, v_d_w_q, A_d, chi_m_w_q, v_m_w_q, A_m = bse.chi_v_r_w_q(dga_cfg, chi0_w_q)
-    else:
-        chi_d_w_q, v_d_w_q, A_d, chi_m_w_q, v_m_w_q, A_m = bse.bse_asymp(dga_cfg, chi0_w_q)
+    # compute chi and v of lattice
+    match asymp:
+        case 'bubble':
+            chi_d_w_q, v_d_w_q, A_d, chi_m_w_q, v_m_w_q, A_m = bse.chi_v_r_w_q(dga_cfg, chi0_w_q)
+        case 'bare-u':
+            chi_d_w_q, v_d_w_q, A_d, chi_m_w_q, v_m_w_q, A_m = bse.bse_asymp(dga_cfg, chi0_w_q)        
+        case 'dual':
+            chi_d_w_q, v_d_w_q, A_d, chi_m_w_q, v_m_w_q, A_m = bse.dual_bse(dga_cfg, chi0_w_q)
+
+    ## compute chi and v
+    #if asymp=='bubble':
+    #    chi_d_w_q, v_d_w_q, A_d, chi_m_w_q, v_m_w_q, A_m = bse.chi_v_r_w_q(dga_cfg, chi0_w_q)
+    #else:
+    #    chi_d_w_q, v_d_w_q, A_d, chi_m_w_q, v_m_w_q, A_m = bse.bse_asymp(dga_cfg, chi0_w_q)
 
     if rank==0:
         print("Calculate chi_r_latt for lambda corrections ...")

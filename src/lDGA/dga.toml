@@ -1,7 +1,7 @@
 [dga]
-	dmft_input="input.hdf5"
+	dmft_input="dmft_input_large.hdf5"
 	max_iter=1
-	asymp = "bare-u" # ['bubble', 'bare-u']
+	asymp = "dual" # ['bubble', 'bare-u', 'dual']
 	nouter = 500
 	file_name="res"
 	lambda_type="Pauli"

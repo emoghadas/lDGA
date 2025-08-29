@@ -19,6 +19,9 @@ dga_config_spec = [
     ('weights', nb.complex128[:]),
     ('irrbz', nb.boolean),
     ('niwf', nb.int64),
+    ('n2iwb', nb.int64),
+    ('n3iwf', nb.int64),
+    ('n3iwb', nb.int64),
     ('n4iwf', nb.int64),
     ('n4iwb', nb.int64),
     ('max_iter', nb.int64),
@@ -48,6 +51,8 @@ dga_config_spec = [
                                # Numba will infer that it can be None if assigned None in __init__
                                # or if you use nb.optional(nb.complex128[:])
     ('s_imp', nb.complex128[:]),
+    ('chi_loc_w', nb.complex128[:,:]),
+    ('p3ph', nb.complex128[:,:,:]),
     ('chi_ph', nb.complex128[:,:,:,:]),
     ('chi0_w', nb.complex128[:,:]),
     ('chi0_w_full', nb.complex128[:,:]),
@@ -73,12 +78,16 @@ class DGA_Config:
                 # Make these mandatory by removing default = None
                 g_imp: np.ndarray,
                 s_imp: np.ndarray,
+                chi_loc_w: np.ndarray,
+                p3ph: np.ndarray,
                 chi_ph: np.ndarray,
                 ts:np.ndarray,
                 # Other parameters (can still have defaults)
                 file_name: str = "results",
                 kdim: int = 2, nk: int = 4, nq: int = 4, irrbz: bool = True,
-                niwf: int = 1000, n4iwf: int = 100, n4iwb: int = 100,
+                niwf: int = 1000, n2iwb: int = 100, 
+                n3iwf: int = 100, n3iwb: int = 100,
+                n4iwf: int = 100, n4iwb: int = 100,
                 asymp: str = 'bubble', nouter: int = 300,
                 max_iter: int = 1, lambda_decay: int = 1, lambda_type: str = "Pauli",
                 use_mpi: bool = True,
@@ -95,6 +104,9 @@ class DGA_Config:
         self.irrbz = irrbz
         # Frequencies
         self.niwf = niwf
+        self.n2iwb = n2iwb
+        self.n3iwf = n3iwf
+        self.n3iwb = n3iwb
         self.n4iwf = n4iwf
         self.n4iwb = n4iwb
         # asymptotics
@@ -115,6 +127,8 @@ class DGA_Config:
         self.occ_imp = occ_imp
         self.g_imp = g_imp
         self.s_imp = s_imp
+        self.chi_loc_w = chi_loc_w
+        self.p3ph = p3ph
         self.chi_ph = chi_ph
         self.ts = ts
 
@@ -132,4 +146,3 @@ class DGA_Config:
 
 #Instance important to pass to function
 DGA_ConfigType = DGA_Config.class_type.instance_type
-

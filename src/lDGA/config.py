@@ -51,8 +51,8 @@ dga_config_spec = [
                                # Numba will infer that it can be None if assigned None in __init__
                                # or if you use nb.optional(nb.complex128[:])
     ('s_imp', nb.complex128[:]),
-    ('chi_loc_w', nb.complex128[:,:]),
-    ('p3ph', nb.complex128[:,:,:]),
+    ('chi_loc_w', nb.optional(nb.complex128[:,:])),
+    ('p3ph', nb.optional(nb.complex128[:,:,:])),
     ('chi_ph', nb.complex128[:,:,:,:]),
     ('chi0_w', nb.complex128[:,:]),
     ('chi0_w_full', nb.complex128[:,:]),
@@ -81,7 +81,7 @@ class DGA_Config:
                 chi_loc_w: np.ndarray,
                 p3ph: np.ndarray,
                 chi_ph: np.ndarray,
-                ts:np.ndarray,
+                ts: np.ndarray,
                 # Other parameters (can still have defaults)
                 file_name: str = "results",
                 kdim: int = 2, nk: int = 4, nq: int = 4, irrbz: bool = True,

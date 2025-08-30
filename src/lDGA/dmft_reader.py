@@ -127,8 +127,8 @@ def read_dmft_config(toml_dgafile_path:str) -> DGA_Config:
                     g4iw_sym[0,...] = g4iw_uu
                     g4iw_sym[1,...] = g4iw_ud
 
-                    chi_ph_data = beta*g4iw_conn(g4iw, giw)
-                    chi_ph_data = chi_ph_data.astype(np.complex128)
+                    chi_ph = beta*g4iw_conn(g4iw_sym, giw)
+                    chi_ph_data = chi_ph.astype(np.complex128)
 
                 case default:
                     U = f['config/U'][()]
@@ -152,14 +152,14 @@ def read_dmft_config(toml_dgafile_path:str) -> DGA_Config:
                     g3iw = f['data/g3iw'][()]
                     n3iwf = g3iw.shape[-2]//2
                     n3iwb = g3iw.shape[-1]//2
-                    p3ph_data = g3iw_conn(g3iw, giw, occ_imp, beta)
-                    p3ph_data = p3ph_data.astype(np.complex128)
+                    p3ph = g3iw_conn(g3iw, giw, occ_imp, beta)
+                    p3ph_data = p3ph.astype(np.complex128)
                     
                     g4iw = f['data/g4iw'][()]
                     n4iwf = g4iw.shape[-2]//2
                     n4iwb = g4iw.shape[-1]//2
-                    chi_ph_data = g4iw_conn(g4iw, giw)
-                    chi_ph_data = chi_ph_data.astype(np.complex128)
+                    chi_ph = g4iw_conn(g4iw, giw)
+                    chi_ph_data = chi_ph.astype(np.complex128)
 
     except KeyError as e:
         print(f"Error reading HDF5 file '{hdf5_dmftfile_path}': Missing expected key or attribute: {e}")

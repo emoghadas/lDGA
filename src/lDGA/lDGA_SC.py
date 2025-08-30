@@ -149,8 +149,8 @@ def main():
 
     if asymp=='dual':
         chi_loc = chi_loc_w[:,n2iwb-n4iwb:n2iwb+n4iwb+1]
-        dga_cfg.chi_d_loc = chi_loc[0,:] + chi_loc[1,:]
-        dga_cfg.chi_m_loc = chi_loc[0,:] - chi_loc[1,:]
+        dga_cfg.chi_d_loc = chi_loc[0,:]
+        dga_cfg.chi_m_loc = chi_loc[1,:]
     else:
         chi_d_loc, chi_m_loc = bse.chi_r_loc(dga_cfg)
         dga_cfg.chi_d_loc = chi_d_loc

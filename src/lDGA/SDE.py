@@ -68,7 +68,7 @@ def Hubbard_Holstein_SDE(dga_cfg:DGA_ConfigType, gamma_d:np.ndarray, gamma_m:np.
 
     theta_nu_wq += -4.0*ununup[0,0] + 2.0*np.reshape(uw, shape=(1,len(uw),1)) # U terms
 
-    if asymp=='bubble':
+    if asymp=='bubble' or asymp=='dual':
         theta_nu_wq += -2*np.einsum('j,ijk->ijk',uw,gamma_d) + (A_d + 3*A_m)/beta # 34.1
     else:
         theta_nu_wq += -2*np.einsum('j,ijk->ijk',uw,gamma_d) + u*(gamma_d + 3*gamma_m) + (A_d + 3*A_m)/beta # here electronic and phononic contributions in A_r are separated

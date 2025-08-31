@@ -260,11 +260,14 @@ def main():
 
         chi0_w_q = bse.chi0_w_q(dga_cfg, new_mu, s_dga=sigma_dga)
 
-        # compute chi and v
-        if asymp=='bubble':
-            chi_d_w_q, v_d_w_q, A_d, chi_m_w_q, v_m_w_q, A_m = bse.chi_v_r_w_q(dga_cfg, chi0_w_q)
-        else:
-            chi_d_w_q, v_d_w_q, A_d, chi_m_w_q, v_m_w_q, A_m = bse.bse_asymp(dga_cfg, chi0_w_q)
+        # compute chi and v of lattice
+        match asymp:
+            case 'bubble':
+                chi_d_w_q, v_d_w_q, A_d, chi_m_w_q, v_m_w_q, A_m = bse.chi_v_r_w_q(dga_cfg, chi0_w_q)
+            case 'bare-u':
+                chi_d_w_q, v_d_w_q, A_d, chi_m_w_q, v_m_w_q, A_m = bse.bse_asymp(dga_cfg, chi0_w_q)        
+            case 'dual':
+                chi_d_w_q, v_d_w_q, A_d, chi_m_w_q, v_m_w_q, A_m = bse.dual_bse(dga_cfg, chi0_w_q)
 
         # store new chis in chi_r_latt
         chi_d_q_full = np.zeros([2*n4iwb+1, n_qpoints], dtype=np.complex128)

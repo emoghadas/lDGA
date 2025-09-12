@@ -121,8 +121,8 @@ def chi_r_loc(dga_cfg:DGA_ConfigType) -> Tuple[np.ndarray, np.ndarray]:
 
             bub_sum = (np.sum(chi0_w[niwf+n4iwf:, w_idx]) + np.sum(chi0_w[:niwf-n4iwf, w_idx])) / beta**2
 
-            chi_d_loc[w_idx] = 1/(1/(np.sum(phi_d)/beta**2 + bub_sum) + u_d[w_idx]) + asymp_chi(2*n4iwf, beta)
-            chi_m_loc[w_idx] = 1/(1/(np.sum(phi_m)/beta**2 + bub_sum) + u_m) + asymp_chi(2*n4iwf, beta)    
+            chi_d_loc[w_idx] = 1/(1/(np.sum(phi_d)/beta**2 + bub_sum) + u_d[w_idx]) + asymp_chi(2*niwf, beta)
+            chi_m_loc[w_idx] = 1/(1/(np.sum(phi_m)/beta**2 + bub_sum) + u_m) + asymp_chi(2*niwf, beta)    
     else:
         for w_idx, iw in enumerate(range(-n4iwb, n4iwb+1)):
             chi_d_gen = chi[0,:,:,w_idx] + chi[1,:,:,w_idx]

@@ -6,6 +6,7 @@
 	file_name="res"
 	lambda_type="Pauli"
 	lambda_decay=2
+	mixing = 0.5
 
 [lattice]
 	ts = [1.0, 0.0]

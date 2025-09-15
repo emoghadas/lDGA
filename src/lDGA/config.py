@@ -25,7 +25,8 @@ dga_config_spec = [
     ('n4iwf', nb.int64),
     ('n4iwb', nb.int64),
     ('max_iter', nb.int64),
-    ('lambda_decay', nb.int64),
+    ('mixing', nb.float64),
+    ('lambda_decay', nb.float64),
     ('lambda_type', nb.types.string),
     ('use_mpi', nb.boolean),
     ('beta', nb.float64),
@@ -89,7 +90,7 @@ class DGA_Config:
                 n3iwf: int = 100, n3iwb: int = 100,
                 n4iwf: int = 100, n4iwb: int = 100,
                 asymp: str = 'bubble', nouter: int = 300,
-                max_iter: int = 1, lambda_decay: int = 1, lambda_type: str = "Pauli",
+                max_iter: int = 1, mixing: float = 0.5, lambda_decay: int = 1, lambda_type: str = "Pauli",
                 use_mpi: bool = True,
                 beta: float = 1000.0, g0: float = 0.0, w0: float = 1.0, U: float = 0.0,
                 mu_imp: float = 0.0, occ_imp: float = 0.0):
@@ -114,6 +115,7 @@ class DGA_Config:
         self.nouter = nouter
         # Self-Consistency and Lambda correction parameters
         self.max_iter = max_iter
+        self.mixing = mixing
         self.lambda_decay = lambda_decay
         self.lambda_type = lambda_type
         self.use_mpi = use_mpi

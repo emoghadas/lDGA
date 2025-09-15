@@ -69,7 +69,9 @@ def main():
 
     # get DGA configs
     max_iter = dga_cfg.max_iter
+    mixing = dga_cfg.mixing
     lambda_type = dga_cfg.lambda_type
+    lambda_decay = dga_cfg.lambda_decay
     file_name = dga_cfg.file_name
 
     # init mpi communicator and get number of processes and ranks
@@ -227,7 +229,7 @@ def main():
     new_mu=0.0
     if(rank==0):
         new_mu = util.get_mu(dga_cfg, sigma_dga)
-    new_mu = comm.bcast(new_mu, root=0)
+    #new_mu = comm.bcast(new_mu, root=0)
 
     if(rank==0):
         print("Saving data of lambda-corrected DGA ...")
@@ -248,6 +250,14 @@ def main():
         group.create_dataset('chi_m_latt',data=chi_m_latt)
         group.create_dataset('mu',data=new_mu)
 
+    # mixing of lambda-DGA SE with DMFT one for more stable self-consistency
+    sigma_dga = (1-mixing)*sigma_dga + mixing*s[niwf-n4iwf:niwf+n4iwf].reshape(2*n4iwf,1)
+
+    #Computing new mu again with mixed selfenergy
+    new_mu=0.0
+    if(rank==0):
+        new_mu = util.get_mu(dga_cfg, sigma_dga)
+    new_mu = comm.bcast(new_mu, root=0)
 
     # Loop for Self-Consistent lDGA
     for iter in range(1,max_iter):
@@ -281,21 +291,31 @@ def main():
         comm.Reduce(chi_d_q_full, chi_d_latt, op=MPI.SUM, root=0)
         comm.Reduce(chi_m_q_full, chi_m_latt, op=MPI.SUM, root=0)
 
-        #TODO: LAMBDA DECAY PROCEDURE
-        lambda_d *= np.exp(-iter)
-        lambda_m *= np.exp(-iter)
+        lambda_d *= lambda_d*np.exp(-lambda_decay*iter)
+        lambda_m *= lambda_m*np.exp(-lambda_decay*iter)
 
         chi_d_w_q = chi_d_w_q / (1.0 + lambda_d*chi_d_w_q)
         chi_m_w_q = chi_m_w_q / (1.0 + lambda_m*chi_m_w_q)
 
         sigma_dga_q = sde.Hubbard_Holstein_SDE(dga_cfg, v_d_w_q, v_m_w_q, A_d,A_m, chi_d_w_q, chi_m_w_q, chi0_w_q, new_mu, sigma_dga)
 
-        if(rank==0):
-            old_mu=new_mu*1
-            old_sigma_dga = sigma_dga*1
+        # copy old sigma on all cores for mixing
+        old_sigma_dga = sigma_dga*1
 
         sigma_dga = np.zeros_like(sigma_dga_q)
         comm.Allreduce(sigma_dga_q, sigma_dga, op=MPI.SUM)
+
+        convg=False
+
+        if(rank==0):
+            error_sigma = np.linalg.norm( sigma_dga-old_sigma_dga )/np.linalg.norm( sigma_dga )
+            print(f"Error Sigma: {error_sigma}")
+            if error_sigma < 1e-3 :
+                convg=True
+        convg = comm.bcast(convg, root=0)
+        
+        # linear mixing of SE for more stable self-consistency
+        sigma_dga = (1-mixing)*sigma_dga + mixing*old_sigma_dga
 
         new_mu=0.0
         if(rank==0):
@@ -303,14 +323,6 @@ def main():
             print("New mu found:", new_mu)
             sys.stdout.flush()
         new_mu = comm.bcast(new_mu, root=0)
-
-        convg=False
-
-        if(rank==0):
-            error_sigma = np.linalg.norm( sigma_dga-old_sigma_dga )/np.linalg.norm( sigma_dga )
-            if error_sigma < 1e-3 :
-                convg=True
-        convg = comm.bcast(convg, root=0)
 
         if(rank==0):
             print(f"Saving data of iteration {iter}")
@@ -324,6 +336,7 @@ def main():
             group.create_dataset('chi_m_latt',data=chi_m_latt)
             group.create_dataset('mu',data=new_mu)
             group.create_dataset('convg',data=convg)
+            group.create_dataset('err_sigma',data=error_sigma)
         if(convg): break
         
     if(rank==0):

@@ -85,7 +85,7 @@ def Hubbard_Holstein_SDE(dga_cfg:DGA_ConfigType, gamma_d:np.ndarray, gamma_m:np.
     theta_nu_wq -= 2*np.einsum('j,imj,mjk->ijk',uw,F_d_loc,chi0_nu_w_q)/beta**2 #local part
 
     #SHOULD BE ZERO BUT IN HUBBARD HELPS CONVERGING
-    #theta_nu_wq += 2*u*np.einsum('imj,mjk->ijk', F_d_loc+F_m_loc,chi0_nu_w_q)/(beta**2) # should be zero, subtracting the antiadiabatic part
+    theta_nu_wq += 2*u*np.einsum('imj,mjk->ijk', F_d_loc+F_m_loc,chi0_nu_w_q)/(beta**2) # should be zero, subtracting the antiadiabatic part
 
 
     comm = MPI.COMM_WORLD

@@ -18,9 +18,10 @@ def read_dmft_config(toml_dgafile_path:str) -> DGA_Config:
     g02 = get_config_value(toml_config,"phonons.g02", default=0.1)
     w0 = get_config_value(toml_config,"phonons.w0", default=1.0)
     max_iter = get_config_value(toml_config, "dga.max_iter", default=1)
+    mixing = get_config_value(toml_config, "dga.mixing", default=0.5)
     file_name = get_config_value(toml_config, "dga.file_name", default="result")
     lambda_type = get_config_value(toml_config, "dga.lambda_type", default="Pauli")
-    lambda_decay = get_config_value(toml_config, "dga.lambda_decay", default=1)
+    lambda_decay = get_config_value(toml_config, "dga.lambda_decay", default=1.0)
     asymp = get_config_value(toml_config, "dga.asymp", default='bubble')
     # check if chosen asymptotics is supported
     asymp_types = ['bubble', 'bare-u', 'dual']
@@ -203,6 +204,7 @@ def read_dmft_config(toml_dgafile_path:str) -> DGA_Config:
         nk = nk,
         nq = nq,
         max_iter = max_iter,
+        mixing = mixing,
         file_name = file_name,
         lambda_type = lambda_type,
         lambda_decay = lambda_decay,

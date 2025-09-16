@@ -15,29 +15,40 @@ def read_dmft_config(toml_dgafile_path:str) -> DGA_Config:
     with open(toml_dgafile_path, 'rb') as f:
         toml_config = tomllib.load(f)
     
+    # phonons
     g02 = get_config_value(toml_config,"phonons.g02", default=0.1)
     w0 = get_config_value(toml_config,"phonons.w0", default=1.0)
-    max_iter = get_config_value(toml_config, "dga.max_iter", default=1)
-    mixing = get_config_value(toml_config, "dga.mixing", default=0.5)
+
+    # general DGA params
+    hdf5_dmftfile_path = get_config_value(toml_config, "dga.dmft_input", default="input.hdf5")
     file_name = get_config_value(toml_config, "dga.file_name", default="result")
+    worm = get_config_value(toml_config, "dga.dmft_worm", default=False)
     lambda_type = get_config_value(toml_config, "dga.lambda_type", default="Pauli")
-    lambda_decay = get_config_value(toml_config, "dga.lambda_decay", default=1.0)
     asymp = get_config_value(toml_config, "dga.asymp", default='bubble')
-    # check if chosen asymptotics is supported
-    asymp_types = ['bubble', 'bare-u', 'dual']
+    asymp_types = ['bubble', 'bare-u', 'dual']  # check if chosen asymptotics is supported
     if asymp not in asymp_types:
         raise ValueError(f"No implementation for specified asymptotics method: {asymp}")
+    dmft_solver = get_config_value(toml_config, "dga.dmft_solver", default="w2dyn")
+    if asymp=='dual' and dmft_solver=='w2dyn':
+        raise ValueError("Asymptotics based on dual-BSE are currently not implemented for the W2DYNAMICS impurity-solver")
     nouter = get_config_value(toml_config, "dga.nouter", default=300)
+    max_iter = get_config_value(toml_config, "dga.max_iter", default=1)
+
+    # self-consistency params
+    eps_se = get_config_value(toml_config, "selfcons.eps_se", default=1e-3)
+    lambda_decay = get_config_value(toml_config, "selfcons.lambda_decay", default=1.0)
+    mix_dmft = get_config_value(toml_config, "selfcons.mix_dmft", default=False)
+    mixing_type = get_config_value(toml_config, "selfcons.mixing_type", default="linear")
+    mixing = get_config_value(toml_config, "selfcons.mixing", default=0.5)
+    beta_diis = get_config_value(toml_config, "selfcons.beta_diis", default=1.0)
+    reg = get_config_value(toml_config, "selfcons.reg", default=1e-8)
+    mixing_window = get_config_value(toml_config, "selfcons.mixing_window", default=2)
+
+    # lattice params
     ts = np.float64(get_config_value(toml_config, "lattice.ts", default=np.array([1.0,0.0])))
     irrbz = get_config_value(toml_config, "lattice.irrbz", default=False)
     nk = get_config_value(toml_config, "lattice.nk", default=4)
     nq = get_config_value(toml_config, "lattice.nq", default=4)
-
-    hdf5_dmftfile_path = get_config_value(toml_config, "dga.dmft_input", default="input.hdf5")
-    worm = get_config_value(toml_config, "dga.dmft_worm", default=False)
-    dmft_solver = get_config_value(toml_config, "dga.dmft_solver", default="w2dyn")
-    if asymp=='dual' and dmft_solver=='w2dyn':
-        raise ValueError("Asymptotics based on dual-BSE are currently not implemented for the W2DYNAMICS impurity-solver")
 
     # Initialize variables that will be passed to DGA_Config
     # Set sensible defaults or ensure they will be overwritten by HDF5 data
@@ -204,7 +215,13 @@ def read_dmft_config(toml_dgafile_path:str) -> DGA_Config:
         nk = nk,
         nq = nq,
         max_iter = max_iter,
+        eps_se = eps_se,
+        mix_dmft = mix_dmft,
+        mixing_type = mixing_type,
         mixing = mixing,
+        beta_diis = beta_diis,
+        reg = reg,
+        mixing_window = mixing_window,
         file_name = file_name,
         lambda_type = lambda_type,
         lambda_decay = lambda_decay,

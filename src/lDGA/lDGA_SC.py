@@ -13,6 +13,7 @@ import lDGA.bse as bse
 import lDGA.utilities as util
 import lDGA.lambda_corr as lamb
 import lDGA.SDE as sde
+import lDGA.anderson_acc as aa
 from mpi4py import MPI
 import sys
 import scipy.optimize as scop
@@ -69,7 +70,13 @@ def main():
 
     # get DGA configs
     max_iter = dga_cfg.max_iter
+    eps_se = dga_cfg.eps_se
+    mix_dmft = dga_cfg.mix_dmft
+    mixing_type = dga_cfg.mixing_type
     mixing = dga_cfg.mixing
+    beta_diis = dga_cfg.beta_diis
+    reg = dga_cfg.reg
+    mixing_window = dga_cfg.mixing_window
     lambda_type = dga_cfg.lambda_type
     lambda_decay = dga_cfg.lambda_decay
     file_name = dga_cfg.file_name
@@ -250,14 +257,24 @@ def main():
         group.create_dataset('chi_m_latt',data=chi_m_latt)
         group.create_dataset('mu',data=new_mu)
 
-    # mixing of lambda-DGA SE with DMFT one for more stable self-consistency
-    sigma_dga = (1-mixing)*sigma_dga + mixing*s[niwf-n4iwf:niwf+n4iwf].reshape(2*n4iwf,1)
+    if mix_dmft:
+        # linear mixing of lambda-DGA SE with DMFT one for more stable self-consistency
+        sigma_dga = (1-mixing)*sigma_dga + mixing*s[niwf-n4iwf:niwf+n4iwf].reshape(2*n4iwf,1)
+    if mixing_type=='diis':
+        if rank==0:
+            print("Applying anderson accelaration for self-energy")
+        acc = aa.AndersonAcceleration(window_size=mixing_window, reg=reg, mixing_param=beta_diis, linmix_param=mixing)
+        sigma_dga = acc.apply(sigma_dga.flatten())
+        sigma_dga = np.reshape(sigma_dga, shape=(2*n4iwf,n_qpoints_fullbz))
 
-    #Computing new mu again with mixed selfenergy
-    new_mu=0.0
-    if(rank==0):
-        new_mu = util.get_mu(dga_cfg, sigma_dga)
-    new_mu = comm.bcast(new_mu, root=0)
+    if mix_dmft:
+        #Computing new mu again with mixed selfenergy
+        if rank==0:
+            print("Recalculating new chemical potential with mixed self-energy")
+        new_mu=0.0
+        if(rank==0):
+            new_mu = util.get_mu(dga_cfg, sigma_dga)
+        new_mu = comm.bcast(new_mu, root=0)
 
     # Loop for Self-Consistent lDGA
     for iter in range(1,max_iter):
@@ -310,12 +327,16 @@ def main():
         if(rank==0):
             error_sigma = np.linalg.norm( sigma_dga-old_sigma_dga )/np.linalg.norm( sigma_dga )
             print(f"Error Sigma: {error_sigma}")
-            if error_sigma < 1e-3 :
+            if error_sigma < eps_se :
                 convg=True
         convg = comm.bcast(convg, root=0)
-        
-        # linear mixing of SE for more stable self-consistency
-        sigma_dga = (1-mixing)*sigma_dga + mixing*old_sigma_dga
+
+        if mixing_type=='diis':
+            sigma_dga = acc.apply(sigma_dga.flatten())
+            sigma_dga = np.reshape(sigma_dga, shape=(2*n4iwf, n_qpoints_fullbz))
+        else:
+            # linear mixing of SE for more stable self-consistency
+            sigma_dga = (1-mixing)*sigma_dga + mixing*old_sigma_dga
 
         new_mu=0.0
         if(rank==0):

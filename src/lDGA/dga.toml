@@ -1,19 +1,30 @@
 [dga]
-	dmft_input="dmft_input_large.hdf5"
-	max_iter=1
+	dmft_input = "dmft_input_large.hdf5"
+	file_name = "res"
 	asymp = "dual" # ['bubble', 'bare-u', 'dual']
 	nouter = 500
-	file_name="res"
-	lambda_type="Pauli"
-	lambda_decay=2
-	mixing = 0.5
+	lambda_type = "Pauli"
+	max_iter = 1
+	
+# only in the case of max_iter > 1
+[selfcons] 	              
+	eps_se = 1e-3		  # error threshold for self-consistency criterion
+	lambda_decay = 2	  # exp. decay rate	for the lambda-correction
+	mix_dmft = false	  # mix DMFT self-energy linearly with first DGA SE, here the value of 'mixing' will be used
+	mixing_type = 'diis'  # ['linear', 'diis']
+	mixing = 0.5	      # linear mixing parameter
+	beta_diis = 1.        # DIIS mixing parameter, beta_diis=0.75 takes 25% of the linear combination of previous iterates						
+	reg = 1e-8		      # ridge regularization for fitting linear combination coefficient alpha	
+	mixing_window = 2     # how many previous self-energies to consider for acceleration
+
 
 [lattice]
 	ts = [1.0, 0.0]
 	irrbz = true
 	nk = 8
 	nq = 8
-	
+
+
 [phonons]
 	g02 = 0.1
 	w0 = 1.0

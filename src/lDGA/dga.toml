@@ -13,7 +13,7 @@
 	mix_dmft = false	  # mix DMFT self-energy linearly with first DGA SE, here the value of 'mixing' will be used
 	mixing_type = 'diis'  # ['linear', 'diis']
 	mixing = 0.5	      # linear mixing parameter
-	beta_diis = 1.        # DIIS mixing parameter, beta_diis=0.75 takes 25% of the linear combination of previous iterates						
+	beta_diis = 1.0        # DIIS mixing parameter, beta_diis=0.75 takes 25% of the linear combination of previous iterates						
 	reg = 1e-8		      # ridge regularization for fitting linear combination coefficient alpha	
 	mixing_window = 2     # how many previous self-energies to consider for acceleration
 

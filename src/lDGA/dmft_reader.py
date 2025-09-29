@@ -49,6 +49,7 @@ def read_dmft_config(toml_dgafile_path:str) -> DGA_Config:
     irrbz = get_config_value(toml_config, "lattice.irrbz", default=False)
     nk = get_config_value(toml_config, "lattice.nk", default=4)
     nq = get_config_value(toml_config, "lattice.nq", default=4)
+    kdim = get_config_value(toml_config, "lattice.kdim", default=2)
 
     # Initialize variables that will be passed to DGA_Config
     # Set sensible defaults or ensure they will be overwritten by HDF5 data
@@ -214,6 +215,7 @@ def read_dmft_config(toml_dgafile_path:str) -> DGA_Config:
         irrbz = irrbz,
         nk = nk,
         nq = nq,
+        kdim = kdim,
         max_iter = max_iter,
         eps_se = eps_se,
         mix_dmft = mix_dmft,

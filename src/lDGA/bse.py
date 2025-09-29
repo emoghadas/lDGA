@@ -2,7 +2,7 @@ import numpy as np
 from numba import jit
 from typing import Tuple
 from lDGA.config import DGA_ConfigType
-from lDGA.utilities import k2ik, build_nu_mats, build_w_mats, U_trans, Udyn, Udyn_arr, G_wq_given_nuk, ek_2d
+from lDGA.utilities import k2ik, build_nu_mats, build_w_mats, U_trans, Udyn, Udyn_arr, G_wq_given_nuk, ek
 #from ._fast_bubble import ek_3d, calc_bubble, calc_bubble_gl
 
 @jit(nopython=True)
@@ -198,9 +198,9 @@ def chi0_w_q(dga_cfg : DGA_ConfigType , mu:np.float64, s_dga:np.ndarray=None) ->
         for ik,k in enumerate(k_grid):
             G_nuw_kq = G_wq_given_nuk(nu,k,s_dmft,n4iwb,qpoints,beta,mu,ts,s_dga)
             if(s_dga is None):
-                G_nu_k = 1.0/(1j*nu - ek_2d(k,t=t1,tpr=t2) + mu - s_dmft[inu-n4iwf+niwf] )
+                G_nu_k = 1.0/(1j*nu - ek(k,t=t1,tpr=t2) + mu - s_dmft[inu-n4iwf+niwf] )
             else:
-                G_nu_k = 1.0/(1j*nu - ek_2d(k, t=t1,tpr=t2) + mu - s_dga[inu,ik] )
+                G_nu_k = 1.0/(1j*nu - ek(k, t=t1,tpr=t2) + mu - s_dga[inu,ik] )
             chi0_wq[inu,:,:] += G_nu_k*G_nuw_kq
     chi0_wq *= -beta/nk
     return chi0_wq

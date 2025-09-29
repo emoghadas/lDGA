@@ -134,10 +134,11 @@ def self_sum_Uw_irr(self_old:np.ndarray, g_old:np.ndarray, theta:np.ndarray,  om
     n4iwf,n4iwb,Nqloc = theta.shape
     n4iwf//=2; n4iwb=n4iwb//2
     niwf = g_old.shape[0] //2
+    n_sym = 8 if dim==2 else 48
 
     self_en = np.zeros((2*n4iwf,Nk), dtype=np.complex128)
 
-    for i_sym in range(8):
+    for i_sym in range(n_sym):
         for inu in range(-n4iwf,n4iwf):
             nu=(np.pi/beta)*(2*inu+1)
             for ik in range(Nk):

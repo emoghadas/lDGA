@@ -23,6 +23,7 @@
 	irrbz = true
 	nk = 8
 	nq = 8
+	kdim = 2
 
 
 [phonons]

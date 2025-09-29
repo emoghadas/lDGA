@@ -151,7 +151,12 @@ class DGA_Config:
     def init_lattice(self):
         # get correct number of kpoints for q and k grid
         if self.irrbz:
-            self.n_qpoints = np.int64(self.nq * (self.nq + 1) / 2)
+            if self.kdim==2:
+                self.n_qpoints = np.int64(self.nq * (self.nq + 1) / 2)
+            elif self.kdim==3:
+                self.n_qpoints = np.int64(self.nq * (self.nq + 1) * (self.nq + 2) / 6)
+            else:
+                raise ValueError("Number of dimension cannot exceed 3")
             self.nk = 2 * self.nq - 2
             self.n_qpoints_fullbz = self.nk**self.kdim
         else:

@@ -2,6 +2,7 @@ import numpy as np
 from scipy.optimize import root
 from numba import jit
 from typing import Tuple
+import itertools
 from lDGA.config import DGA_ConfigType
 
 ##### LATTICE UTILITIES #####
@@ -34,7 +35,7 @@ def wrap_k(k:np.ndarray) -> np.ndarray:
     return k
 
 @jit(nopython=True)
-def irr_q_grid(qpoints:np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+def irr_q_grid_2d(qpoints:np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     nq = len(qpoints)
 
     q_grid = []
@@ -59,12 +60,46 @@ def irr_q_grid(qpoints:np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     return q_grid, weights
 
 @jit(nopython=True)
-def irr2fullBZ(nq:np.int64, qpoints:np.ndarray, f_q:np.ndarray) -> np.ndarray:
+def irr_q_grid_3d(qpoints:np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    nq = len(qpoints)
+
+    q_grid = []
+    weights = []
+    for ix in range(1,nq+1):
+        a = 1
+        if (ix==1 or ix==nq):
+            a *= 0.5
+        for iy in range(1,ix+1):
+            b = a
+            if (iy==1 or iy==nq):
+                b *= 0.5
+            for iz in range(1,iy+1):
+                c = b
+                if (iz==1 or iz==nq):
+                    c *= 0.5
+                c *= 6//( (iy)//(ix) + (iz)//(iy) + 3*((iz)//(ix)) + 1 )
+
+                weights.append(c)
+                qx = qpoints[ix-1]
+                qy = qpoints[iy-1]
+                qz = qpoints[iz-1]
+                q_grid.append([qx, qy, qz])
+
+    q_grid = np.array(q_grid)
+    weights = np.array(weights, dtype=np.complex128)
+
+    return q_grid, weights
+
+@jit(nopython=True)
+def irr2fullBZ(nq:np.int64, qpoints:np.ndarray, f_q:np.ndarray, dim:np.int64) -> np.ndarray:
     nq_full = 2 * nq - 2
-    f_q_full = np.zeros(nq_full**2, dtype=np.complex128)
+    f_q_full = np.zeros(nq_full**dim, dtype=np.complex128)
 
     for i, (q, f_i) in enumerate(zip(qpoints, f_q)):
-        q_all = generate_sym(q)
+        if dim==2:
+            q_all = generate_sym(q)
+        elif dim==3:
+            q_all = generate_sym_3d(q)
         for q_sym in q_all:
             iq = k2ik(q_sym, nq_full)
             f_q_full[iq] = f_i
@@ -72,16 +107,26 @@ def irr2fullBZ(nq:np.int64, qpoints:np.ndarray, f_q:np.ndarray) -> np.ndarray:
     return f_q_full
 
 @jit(nopython=True)
-def ek_2d(k:np.ndarray, t:np.float64=0.25, tpr:np.float64=0., tsec:np.float64=0.) -> np.float64:
+def ek(k:np.ndarray, t:np.float64=1.0, tpr:np.float64=0., tsec:np.float64=0.) -> np.float64:
     '''
-    return 2d sqaured lattice Hamiltonian evaluated at give k-point
+    return sqaured/cubic lattice Hamiltonian evaluated at give k-point
     '''
-    kx = k[0]
-    ky = k[1]
-    
-    ek = - 2*t*(np.cos(kx) + np.cos(ky))\
-               - 4*tpr*np.cos(kx)*np.cos(ky)\
-               - 2*tsec*(np.cos(2*kx)+np.cos(2*ky))
+    kdim = len(k)
+    if kdim==2:
+        kx = k[0]
+        ky = k[1]
+
+        ek = - 2*t*(np.cos(kx) + np.cos(ky))\
+                   - 4*tpr*np.cos(kx)*np.cos(ky)\
+                   - 2*tsec*(np.cos(2*kx)+np.cos(2*ky))
+    else:
+        kx = k[0]
+        ky = k[1]
+        kz = k[2]
+
+        ek = - 2*t*(np.cos(kx) + np.cos(ky) + np.cos(kz)) \
+                   - 4*tpr*( np.cos(kx)*np.cos(ky) + np.cos(ky)*np.cos(kz) + np.cos(kz)*np.cos(kx) ) \
+                   - 2*tsec*( np.cos(2*kx) + np.cos(2*ky) + np.cos(2*kz) )
     return ek
 
 # this must not be jit compiled
@@ -93,8 +138,6 @@ def k_grid(nk:np.int64, kdim:np.int64) -> np.ndarray:
     elif kdim==3:
         k_grid = np.meshgrid(kpoints, kpoints, kpoints)
         k_grid = np.array(k_grid).reshape(3,-1).T
-    else:
-        raise ValueError("Number of dimension cannot exceed 3")
     return k_grid
 
 # this must not be jit compiled
@@ -107,9 +150,10 @@ def create_qgrid(dga_cfg:DGA_ConfigType) -> None:
     # create q_grid
     if dga_cfg.irrbz:
         q = np.linspace(0, np.pi, dga_cfg.nq, endpoint=True)
-        if dga_cfg.kdim!=2:
-            raise ValueError("Irreducible BZ summation only implemented for d=2")
-        q_grid, weights = irr_q_grid(q)
+        if dga_cfg.kdim==2:
+            q_grid, weights = irr_q_grid_2d(q)
+        else:
+            q_grid, weights = irr_q_grid_3d(q)
     else:
         q_grid = k_grid(dga_cfg.nq, dga_cfg.kdim)
         weights = np.ones(q_grid.shape[0], dtype=np.complex128)
@@ -170,7 +214,7 @@ def G_wq_given_nuk(nu:np.float64, k:np.ndarray, sigma:np.ndarray, n4iwb:int, qpo
         Nk_lin = int(np.round(Nk**(1/dim)))
         n4iwf = sigma_dga.shape[0]//2
     for iq,q in enumerate(qpoints):
-        eps_kq = np.complex128(ek_2d(k+q, t=t1,tpr=t2))
+        eps_kq = np.complex128(ek(k+q, t=t1,tpr=t2))
 
         for iw in range(-n4iwb,1+n4iwb):
             nu_plus_w = nu+np.pi*(2.0*iw)/beta
@@ -203,6 +247,88 @@ def generate_sym(q: np.ndarray) -> np.ndarray:
 
     return q_sym
 
+# 6 axis permutations and their parities (+1 even, -1 odd)
+_PERMS = np.array([
+    [0, 1, 2],  # even
+    [0, 2, 1],  # odd
+    [1, 0, 2],  # odd
+    [1, 2, 0],  # even (3-cycle)
+    [2, 0, 1],  # even (3-cycle)
+    [2, 1, 0],  # odd
+], dtype=np.int64)
+
+_PARITY = np.array([+1, -1, -1, +1, +1, -1], dtype=np.int64)
+
+@jit(cache=True)
+def generate_sym_3d(q, proper_only=False):
+    """
+    Numba-compatible: generate symmetry-equivalent k-points for simple-cubic.
+    Parameters
+    ----------
+    q : array-like shape (3,)
+    proper_only : bool
+        If True -> 24 proper rotations (det=+1), else full Oh (48).
+    Returns
+    -------
+    out : ndarray, shape (24,) or (48,), 3
+    """
+    qx = float(q[0])
+    qy = float(q[1])
+    qz = float(q[2])
+
+    # Max 48 results; we’ll slice to actual count at the end
+    out = np.empty((48, 3), dtype=np.float64)
+    n = 0
+
+    for pi in range(6):  # over permutations
+        p0 = _PERMS[pi, 0]
+        p1 = _PERMS[pi, 1]
+        p2 = _PERMS[pi, 2]
+        perm_parity = _PARITY[pi]
+
+        for s0 in (-1.0, 1.0):
+            for s1 in (-1.0, 1.0):
+                for s2 in (-1.0, 1.0):
+                    # determinant sign = parity * product(signs)
+                    det_sign = perm_parity
+                    if s0 < 0.0:
+                        det_sign = -det_sign
+                    if s1 < 0.0:
+                        det_sign = -det_sign
+                    if s2 < 0.0:
+                        det_sign = -det_sign
+
+                    if proper_only and det_sign != 1:
+                        continue
+
+                    # Apply signed permutation: r[i] = s_i * q[perm[i]]
+                    if p0 == 0:
+                        r0 = s0 * qx
+                    elif p0 == 1:
+                        r0 = s0 * qy
+                    else:
+                        r0 = s0 * qz
+
+                    if p1 == 0:
+                        r1 = s1 * qx
+                    elif p1 == 1:
+                        r1 = s1 * qy
+                    else:
+                        r1 = s1 * qz
+
+                    if p2 == 0:
+                        r2 = s2 * qx
+                    elif p2 == 1:
+                        r2 = s2 * qy
+                    else:
+                        r2 = s2 * qz
+
+                    out[n, 0] = r0
+                    out[n, 1] = r1
+                    out[n, 2] = r2
+                    n += 1
+
+    return out[:n]
 
 @jit(nopython=True)
 def G_wq_given_nuk_irr(nu:np.float64, k:np.ndarray, sigma:np.ndarray, n4iwb:int, qpoints:np.ndarray, beta:np.float64, mu:np.float64, ts:np.ndarray, sigma_dga:np.ndarray=None)-> np.ndarray:
@@ -219,19 +345,38 @@ def G_wq_given_nuk_irr(nu:np.float64, k:np.ndarray, sigma:np.ndarray, n4iwb:int,
         Nk_lin = int(np.round(Nk**(1/dim)))
         n4iwf = sigma_dga.shape[0]//2
     for iq,q in enumerate(qpoints):
-        qx = q[0]
-        qy = q[1]
-        weight=1.
-        if qx==0 or qx==np.pi:
-            weight *= 0.5
-        if qy==0 or qy==np.pi:
-            weight *= 0.5
-        if np.abs(qx-qy)<1e-8:
-            weight *= 0.5
+        if dim==2:
+            qx = q[0]
+            qy = q[1]
+            weight=1.
+            if qx==0 or qx==np.pi:
+                weight *= 0.5
+            if qy==0 or qy==np.pi:
+                weight *= 0.5
+            if np.abs(qx-qy)<1e-8:
+                weight *= 0.5
 
-        all_qs = generate_sym(q)
+            all_qs = generate_sym(q)
+        else:
+            qx = q[0]
+            qy = q[1]
+            qz = q[2]
+            weight=1.
+            if qx==0 or qx==np.pi:
+                weight *= 0.5
+            if qy==0 or qy==np.pi:
+                weight *= 0.5
+            if qz==0 or qz==np.pi:
+                weight *= 0.5
+            if np.abs(qx-qy)<1e-8 and np.abs(qx-qz)<1e-8:
+                weight *= 1/6
+            elif np.abs(qx-qy)<1e-8 or np.abs(qy-qz)<1e-8:
+                weight *= 0.5
+
+            all_qs = generate_sym_3d(q)
+
         for iq_sym,q_sym in enumerate(all_qs):
-            eps_kq = np.complex128(ek_2d(k+q_sym, t=t1,tpr=t2))
+            eps_kq = np.complex128(ek(k+q_sym, t=t1,tpr=t2))
 
             for iw in range(-n4iwb,1+n4iwb):
                 nu_plus_w = nu+np.pi*(2.0*iw)/beta
@@ -278,7 +423,7 @@ def get_mu(dga_cfg:DGA_ConfigType, sigma_dga:np.ndarray) -> np.float64:
     else:
         t1=ts[0]; t2=ts[1]
     for ik,k in enumerate(k_grid):
-        eps_kgrid[ik] = ek_2d(k, t=t1, tpr=t2)
+        eps_kgrid[ik] = ek(k, t=t1, tpr=t2)
     root_sol = root(mu_root,args=(n_target,sigma_dga,eps_kgrid,beta),x0=mu_start,method="lm",tol=1e-10)
     mu_sol = root_sol.x[0]
     if(root_sol.success):

@@ -259,7 +259,7 @@ _PERMS = np.array([
 
 _PARITY = np.array([+1, -1, -1, +1, +1, -1], dtype=np.int64)
 
-@jit(cache=True)
+@jit(nopython=True)
 def generate_sym_3d(q, proper_only=False):
     """
     Numba-compatible: generate symmetry-equivalent k-points for simple-cubic.
@@ -329,12 +329,83 @@ def generate_sym_3d(q, proper_only=False):
                     n += 1
 
     return out[:n]
+'''
+@jit(nopython=True)
+def generate_sym_3d(q: np.ndarray) -> np.ndarray:
+    sym_ops = np.array([
+        # All 48 signed permutation matrices
+        # identity and axis flips
+        [[ 1, 0, 0],[ 0, 1, 0],[ 0, 0, 1]],
+        [[-1, 0, 0],[ 0, 1, 0],[ 0, 0, 1]],
+        [[ 1, 0, 0],[ 0,-1, 0],[ 0, 0, 1]],
+        [[ 1, 0, 0],[ 0, 1, 0],[ 0, 0,-1]],
+        [[-1, 0, 0],[ 0,-1, 0],[ 0, 0, 1]],
+        [[-1, 0, 0],[ 0, 1, 0],[ 0, 0,-1]],
+        [[ 1, 0, 0],[ 0,-1, 0],[ 0, 0,-1]],
+        [[-1, 0, 0],[ 0,-1, 0],[ 0, 0,-1]],
+
+        # xy permutations (z fixed)
+        [[ 0, 1, 0],[ 1, 0, 0],[ 0, 0, 1]],
+        [[ 0,-1, 0],[ 1, 0, 0],[ 0, 0, 1]],
+        [[ 0, 1, 0],[-1, 0, 0],[ 0, 0, 1]],
+        [[ 0,-1, 0],[-1, 0, 0],[ 0, 0, 1]],
+        [[ 0, 1, 0],[ 1, 0, 0],[ 0, 0,-1]],
+        [[ 0,-1, 0],[ 1, 0, 0],[ 0, 0,-1]],
+        [[ 0, 1, 0],[-1, 0, 0],[ 0, 0,-1]],
+        [[ 0,-1, 0],[-1, 0, 0],[ 0, 0,-1]],
+
+        # xz permutations (y fixed)
+        [[ 0, 0, 1],[ 0, 1, 0],[ 1, 0, 0]],
+        [[ 0, 0,-1],[ 0, 1, 0],[ 1, 0, 0]],
+        [[ 0, 0, 1],[ 0, 1, 0],[-1, 0, 0]],
+        [[ 0, 0,-1],[ 0, 1, 0],[-1, 0, 0]],
+        [[ 0, 0, 1],[ 0,-1, 0],[ 1, 0, 0]],
+        [[ 0, 0,-1],[ 0,-1, 0],[ 1, 0, 0]],
+        [[ 0, 0, 1],[ 0,-1, 0],[-1, 0, 0]],
+        [[ 0, 0,-1],[ 0,-1, 0],[-1, 0, 0]],
+
+        # yz permutations (x fixed)
+        [[ 1, 0, 0],[ 0, 0, 1],[ 0, 1, 0]],
+        [[ 1, 0, 0],[ 0, 0,-1],[ 0, 1, 0]],
+        [[ 1, 0, 0],[ 0, 0, 1],[ 0,-1, 0]],
+        [[ 1, 0, 0],[ 0, 0,-1],[ 0,-1, 0]],
+        [[-1, 0, 0],[ 0, 0, 1],[ 0, 1, 0]],
+        [[-1, 0, 0],[ 0, 0,-1],[ 0, 1, 0]],
+        [[-1, 0, 0],[ 0, 0, 1],[ 0,-1, 0]],
+        [[-1, 0, 0],[ 0, 0,-1],[ 0,-1, 0]],
+
+        # cyclic permutations (x→y→z)
+        [[ 0, 1, 0],[ 0, 0, 1],[ 1, 0, 0]],
+        [[ 0,-1, 0],[ 0, 0, 1],[ 1, 0, 0]],
+        [[ 0, 1, 0],[ 0, 0,-1],[ 1, 0, 0]],
+        [[ 0,-1, 0],[ 0, 0,-1],[ 1, 0, 0]],
+        [[ 0, 1, 0],[ 0, 0, 1],[-1, 0, 0]],
+        [[ 0,-1, 0],[ 0, 0, 1],[-1, 0, 0]],
+        [[ 0, 1, 0],[ 0, 0,-1],[-1, 0, 0]],
+        [[ 0,-1, 0],[ 0, 0,-1],[-1, 0, 0]],
+
+        # reverse cyclic permutations
+        [[ 0, 0, 1],[ 1, 0, 0],[ 0, 1, 0]],
+        [[ 0, 0,-1],[ 1, 0, 0],[ 0, 1, 0]],
+        [[ 0, 0, 1],[-1, 0, 0],[ 0, 1, 0]],
+        [[ 0, 0,-1],[-1, 0, 0],[ 0, 1, 0]],
+        [[ 0, 0, 1],[ 1, 0, 0],[ 0,-1, 0]],
+        [[ 0, 0,-1],[ 1, 0, 0],[ 0,-1, 0]],
+        [[ 0, 0, 1],[-1, 0, 0],[ 0,-1, 0]],
+        [[ 0, 0,-1],[-1, 0, 0],[ 0,-1, 0]],
+    ], dtype=np.float64)
+
+    q_sym = np.empty((48, 3), dtype=np.float64)
+    for i in range(48):
+        q_sym[i] = np.dot(sym_ops[i], q)
+    return q_sym'''
 
 @jit(nopython=True)
 def G_wq_given_nuk_irr(nu:np.float64, k:np.ndarray, sigma:np.ndarray, n4iwb:int, qpoints:np.ndarray, beta:np.float64, mu:np.float64, ts:np.ndarray, sigma_dga:np.ndarray=None)-> np.ndarray:
     dim = len(k); inu=nu2inu(nu, beta)
     Nq, dimq = qpoints.shape
-    Gres = np.zeros( (2*n4iwb+1,Nq,8), dtype=np.complex128 )
+    n_sym = 8 if dim==2 else 48
+    Gres = np.zeros( (2*n4iwb+1,Nq,n_sym), dtype=np.complex128 )
     niwf = sigma.shape[0]//2
     n4iwf = 0
     t1=ts[0]

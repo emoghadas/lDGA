@@ -166,6 +166,11 @@ def main():
         dga_cfg.chi_m_loc = chi_m_loc
 
     if rank==0:
+        print("Doing local SDE check ...")
+        sys.stdout.flush()    
+    sigma_sde_loc = sde.local_sde_check(dga_cfg)
+
+    if rank==0:
         print("Calculate lattice bubble ...")
         sys.stdout.flush()
 
@@ -250,6 +255,8 @@ def main():
         group.create_dataset('w0',data=w0)
         group.create_dataset('g0',data=g0)
         group = fsave.create_group('iter_0')
+        group.create_dataset('sigma_dmft',data=s)
+        group.create_dataset('sigma_sde_loc',data=sigma_sde_loc)
         group.create_dataset('sigma',data=sigma_dga)
         group.create_dataset('lambda_d',data=lambda_d)
         group.create_dataset('lambda_m',data=lambda_m)

@@ -1,6 +1,8 @@
 import numpy as np
 from lDGA.utilities import ik2k, k2ik, G_wq_given_nuk, G_wq_given_nuk_irr, Udyn_arr, G_w_given_nu, U_trans, Udyn, build_nu_mats, build_w_mats,Udyn_arr
 from lDGA.bse import asymp_chi
+import lDGA.bse as bse 
+import numba as nb
 from numba import jit
 from numba.experimental import jitclass
 from lDGA.config import DGA_ConfigType
@@ -138,18 +140,24 @@ def self_sum_Uw_irr(self_old:np.ndarray, g_old:np.ndarray, theta:np.ndarray,  om
 
     self_en = np.zeros((2*n4iwf,Nk), dtype=np.complex128)
 
-    for i_sym in range(n_sym):
-        for inu in range(-n4iwf,n4iwf):
-            nu=(np.pi/beta)*(2*inu+1)
-            for ik in range(Nk):
-                k = ik2k(ik,dim,int(Nk**(1/dim)))
-                self_en[inu+n4iwf,ik] +=(0.5/beta)*np.sum( theta[inu+n4iwf,:,:] * G_wq_given_nuk_irr(nu,k,self_old,n4iwb,qpoints,beta,mu,ts,self_dga)[:,:,i_sym])/Nqtot #vertex term
+    for inu in range(-n4iwf,n4iwf):
+        nu=(np.pi/beta)*(2*inu+1)
+        th = np.ascontiguousarray(theta[inu + n4iwf, :, :])
+        th1d = th.reshape(-1)
+        for ik in range(Nk):
+            k = ik2k(ik,dim,int(Nk**(1/dim)))
+            Gwq = G_wq_given_nuk_irr(nu, k, self_old, n4iwb, qpoints, beta, mu, ts, self_dga)
+            # loop over symmetry equivalent q-points
+            for i_sym in range(n_sym):
+                G1d  = Gwq[i_sym].reshape(-1)
+                val = np.dot(th1d, G1d)
+                self_en[inu + n4iwf, ik] += (0.5 / beta) * val / Nqtot
                 if( (g0!=0.0) and (not self_dga is None) ):
-                    self_en[inu+n4iwf,ik] -= np.sum(G_wq_given_nuk_irr(nu,k,self_old,n4iwb,qpoints,beta,mu,ts,self_dga)[:,:,i_sym]*Udyn_arr(build_w_mats(n4iwb,beta),omega0,g0).reshape(2*n4iwb+1,1))/beta/Nqtot
-            if( (g0!=0.0 and mpi_rank==0) and ( self_dga is None) and (i_sym==0)):
-                for inup in range(-niwf,niwf):
-                    nup=(np.pi/beta)*(2*inup+1)
-                    self_en[inu+n4iwf,:] -= g_old[inup+niwf]*Udyn(nu-nup,omega0,g0,u=0.0)*np.exp(1j*nup*1e-10)/beta
+                    self_en[inu+n4iwf,ik] -= np.sum(Gwq[i_sym]*Udyn_arr(build_w_mats(n4iwb,beta),omega0,g0).reshape(2*n4iwb+1,1)) / beta / Nqtot
+        if( (g0!=0.0 and mpi_rank==0) and (self_dga is None)):
+            for inup in range(-niwf,niwf):
+                nup=(np.pi/beta)*(2*inup+1)
+                self_en[inu+n4iwf,:] -= g_old[inup+niwf]*Udyn(nu-nup,omega0,g0,u=0.0)*np.exp(1j*nup*1e-10)/beta
     return self_en
 
 #internal auxiliary routine
@@ -171,9 +179,44 @@ def self_sum_U(self_old:np.array, theta:np.ndarray, U:np.float64, beta:np.float6
 
 
 ###################################### ONLY FOR LOCAL TESTS PURPOSES ###########################################
-#
+
+def local_sde_check(dga_cfg:DGA_ConfigType):
+    beta = dga_cfg.beta
+    U = dga_cfg.U
+    w0 = dga_cfg.w0
+    g0 = dga_cfg.g0
+    mu = dga_cfg.mu_imp
+    n = dga_cfg.occ_imp
+    g = dga_cfg.g_imp
+    n4iwf = dga_cfg.n4iwf
+    n4iwb = dga_cfg.n4iwb
+    g2 = dga_cfg.chi_ph
+    chi0_w_full = dga_cfg.chi0_w_full
+    chi0_w = dga_cfg.chi0_w
+    gamma_d = dga_cfg.gamma_d
+    gamma_m = dga_cfg.gamma_m
+    F_d_loc = dga_cfg.F_d_loc
+    F_m_loc = dga_cfg.F_m_loc
+    nouter = dga_cfg.nouter
+    asymp = dga_cfg.asymp
+
+    chi0_w_q = chi0_w
+
+    if asymp=='bare-u':
+        data = bse.bse_asymp(dga_cfg, chi0_w_q.reshape(*chi0_w_q.shape,1), local=True)
+    elif asymp=='dual':
+        data = bse.dual_bse(dga_cfg, chi0_w_q.reshape(*chi0_w_q.shape,1), local=True)
+    else:
+        data = bse.chi_v_r_w_q(dga_cfg, chi0_w_q.reshape(*chi0_w_q.shape,1), local=True)
+
+    chi_d_w_q, v_d_w_q, A_d, chi_m_w_q, v_m_w_q, A_m = data
+
+    sigma_sde_loc = Hubbard_Holstein_SDE_loc(U, g0, w0, beta, v_d_w_q[...,0], v_m_w_q[...,0], A_d[...,0], A_m[...,0], chi_d_w_q[...,0], chi_m_w_q[...,0], F_d_loc, F_m_loc, chi0_w_q, g, n, mu, asymp)
+    
+    return sigma_sde_loc
+
 # Local Swinger-Dyson for the Hubbard-Holstein model
-def Hubbard_Holstein_SDE_loc(u:np.float64, g0:np.float64, omega0:np.float64, beta:np.float64, gamma_d:np.ndarray, gamma_m:np.ndarray,  A_d:np.ndarray, A_m:np.ndarray, chi_d_w:np.ndarray, chi_m_w:np.ndarray, F_d_loc:np.ndarray, F_m_loc:np.ndarray, chi0_nu_w:np.ndarray, g_old:np.ndarray, dens:np.float64, mu:np.float64) -> np.ndarray:
+def Hubbard_Holstein_SDE_loc(u:np.float64, g0:np.float64, omega0:np.float64, beta:np.float64, gamma_d:np.ndarray, gamma_m:np.ndarray,  A_d:np.ndarray, A_m:np.ndarray, chi_d_w:np.ndarray, chi_m_w:np.ndarray, F_d_loc:np.ndarray, F_m_loc:np.ndarray, chi0_nu_w:np.ndarray, g_old:np.ndarray, dens:np.float64, mu:np.float64, asymp:nb.types.string) -> np.ndarray:
     n4iwf = F_d_loc.shape[0]//2
     n4iwb = chi_d_w.shape[0]//2
     self_energy = np.zeros( (2*n4iwf), dtype=np.complex128)
@@ -189,9 +232,12 @@ def Hubbard_Holstein_SDE_loc(u:np.float64, g0:np.float64, omega0:np.float64, bet
     #USING OUR FORMULA
     theta_nu_w = np.zeros( (2*n4iwf,2*n4iwb+1), dtype=np.complex128)
 
-    theta_nu_w += -4.0*ununup[0,0] + 2.0*np.reshape(uw,newshape=(1,len(uw))) # U terms
+    theta_nu_w += -4.0*ununup[0,0] + 2.0*np.reshape(uw, shape=(1,len(uw))) # U terms
 
-    theta_nu_w += -2*np.einsum('j,ij->ij', uw, gamma_d) + (A_d + 3*A_m)/beta # 34.1
+    if asymp=='bubble' or asymp=='dual':
+        theta_nu_w += -2*np.einsum('j,ij->ij',uw,gamma_d) + (A_d + 3*A_m)/beta # 34.1
+    else:
+        theta_nu_w += -2*np.einsum('j,ij->ij',uw,gamma_d) + u*(gamma_d + 3*gamma_m) + (A_d + 3*A_m)/beta # here electronic and phononic contributions in A_r are separated
 
     theta_nu_w +=  np.einsum('ij,j,mj,mj->ij', gamma_d, 2*uw*u_d*(1-u_d*chi_d_w), gamma_d, chi0_nu_w)/beta**2 # 34.2
 
@@ -218,7 +264,7 @@ def Hubbard_Holstein_SDE_loc(u:np.float64, g0:np.float64, omega0:np.float64, bet
     self_energy2 = self_sum_Uw_loc(g_old, theta, omega0, g0, beta)/(beta**2)
     self_energy2 += dens*( u - (4.*g0**2/omega0) ) + (g0**2/omega0) 
 
-    return self_energy, self_energy2
+    return self_energy #, self_energy2
 
 # Local Swinger-Dyson for the Hubbard model
 def Hubbard_SDE_loc(u:np.float64, beta:np.float64, gamma_d:np.ndarray, gamma_m:np.ndarray, chi_d_w:np.ndarray, chi_m_w:np.ndarray, F_d_loc:np.ndarray, F_m_loc:np.ndarray, chi0_nu_w:np.ndarray, g_old:np.ndarray, dens:np.float64, mu:np.float64) -> np.ndarray:

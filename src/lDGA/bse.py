@@ -207,7 +207,7 @@ def chi0_w_q(dga_cfg : DGA_ConfigType , mu:np.float64, s_dga:np.ndarray=None) ->
 
 
 @jit(nopython=True)
-def chi_v_r_w_q(dga_cfg:DGA_ConfigType , chi0_w_q:np.ndarray) \
+def chi_v_r_w_q(dga_cfg:DGA_ConfigType , chi0_w_q:np.ndarray, local:bool = False) \
          -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]: # chi_d, gamma_d, A,  chi_m, gamma_m, A
     '''
     Compute physical susceptibility and three leg vertex of the lattice for all iw and given q-points
@@ -217,7 +217,10 @@ def chi_v_r_w_q(dga_cfg:DGA_ConfigType , chi0_w_q:np.ndarray) \
     n4iwf=dga_cfg.n4iwf; n4iwb=dga_cfg.n4iwb
     chi=dga_cfg.chi_ph
     chi0_w = dga_cfg.chi0_w
-    qpoints = dga_cfg.q_grid_loc
+    if local:
+        qpoints=np.array([[0.,0.]])
+    else:
+        qpoints = dga_cfg.q_grid_loc
     
     chi_d = chi[0,...] + chi[1,...]
     chi_m = chi[0,...] - chi[1,...]
@@ -274,7 +277,7 @@ def chi_v_r_w_q(dga_cfg:DGA_ConfigType , chi0_w_q:np.ndarray) \
 
 
 @jit(nopython=True)
-def bse_asymp(dga_cfg:DGA_ConfigType, chi0_w_q:np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+def bse_asymp(dga_cfg:DGA_ConfigType, chi0_w_q:np.ndarray, local:bool = False) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     ''' non-local BSE with asymptotic knowledge of bare U(w) '''
     beta=dga_cfg.beta 
     u=dga_cfg.U
@@ -287,7 +290,10 @@ def bse_asymp(dga_cfg:DGA_ConfigType, chi0_w_q:np.ndarray) -> Tuple[np.ndarray, 
     gamma_d = dga_cfg.gamma_d
     gamma_m = dga_cfg.gamma_m
     chi0_w = dga_cfg.chi0_w_full
-    qpoints = dga_cfg.q_grid_loc
+    if local:
+        qpoints=np.array([[0.,0.]])
+    else:
+        qpoints = dga_cfg.q_grid_loc
 
     chi_d_gen = chi[0,...] + chi[1,...]
     chi_m_gen = chi[0,...] - chi[1,...]

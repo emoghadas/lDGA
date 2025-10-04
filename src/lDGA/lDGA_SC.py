@@ -18,6 +18,7 @@ from mpi4py import MPI
 import sys
 import scipy.optimize as scop
 import matplotlib.pyplot as plt
+from time import perf_counter
 
 def load_config() -> str:
     # Use first argument if provided, else default to ./dga.toml
@@ -134,6 +135,10 @@ def main():
     q_grid_loc = dga_cfg.q_grid_loc
 
     comm.Barrier()
+
+    if rank == 0:
+        t0 = perf_counter()
+
     if rank==0:
         print("Calculate local quantities ... ")
         sys.stdout.flush()
@@ -263,6 +268,7 @@ def main():
         group.create_dataset('chi_d_latt',data=chi_d_latt)
         group.create_dataset('chi_m_latt',data=chi_m_latt)
         group.create_dataset('mu',data=new_mu)
+        fsave.flush()
 
     if mix_dmft:
         # linear mixing of lambda-DGA SE with DMFT one for more stable self-consistency
@@ -271,7 +277,7 @@ def main():
         if rank==0:
             print("Applying anderson accelaration for self-energy")
         acc = aa.AndersonAcceleration(window_size=mixing_window, reg=reg, mixing_param=beta_diis, linmix_param=mixing)
-        sigma_dga = acc.apply(sigma_dga.flatten())
+        sigma_dga = acc.apply(sigma_dga.reshape(-1))
         sigma_dga = np.reshape(sigma_dga, shape=(2*n4iwf,n_qpoints_fullbz))
 
     if mix_dmft:
@@ -283,6 +289,9 @@ def main():
             new_mu = util.get_mu(dga_cfg, sigma_dga)
         new_mu = comm.bcast(new_mu, root=0)
 
+    if rank == 0:
+        print("Time of iteration 0 :", perf_counter() - t0, "seconds")
+
     # Loop for Self-Consistent lDGA
     for iter in range(1,max_iter):
         if rank==0:
@@ -291,6 +300,8 @@ def main():
             print(f"***** Doing iter={iter} *****")
             sys.stdout.flush()
 
+        if rank == 0:
+            t0 = perf_counter()
 
         chi0_w_q = bse.chi0_w_q(dga_cfg, new_mu, s_dga=sigma_dga)
 
@@ -304,19 +315,20 @@ def main():
                 chi_d_w_q, v_d_w_q, A_d, chi_m_w_q, v_m_w_q, A_m = bse.dual_bse(dga_cfg, chi0_w_q)
 
         # store new chis in chi_r_latt
-        chi_d_q_full = np.zeros([2*n4iwb+1, n_qpoints], dtype=np.complex128)
+        chi_d_q_full[...] = 0. #np.zeros([2*n4iwb+1, n_qpoints], dtype=np.complex128)
         chi_d_q_full[:,q_range] = chi_d_w_q
-        chi_m_q_full = np.zeros([2*n4iwb+1, n_qpoints], dtype=np.complex128)
+        chi_m_q_full[...] = 0. #np.zeros([2*n4iwb+1, n_qpoints], dtype=np.complex128)
         chi_m_q_full[:,q_range] = chi_m_w_q
 
-        chi_d_latt = np.zeros_like(chi_d_q_full) if rank==0 else None
-        chi_m_latt = np.zeros_like(chi_d_q_full) if rank==0 else None
+        if rank==0:
+            chi_d_latt[...] = 0. #np.zeros_like(chi_d_q_full) if rank==0 else None
+            chi_m_latt[...] = 0. #np.zeros_like(chi_d_q_full) if rank==0 else None
         #print(f"Process {rank}: ready to pass chi_lattice")
         comm.Reduce(chi_d_q_full, chi_d_latt, op=MPI.SUM, root=0)
         comm.Reduce(chi_m_q_full, chi_m_latt, op=MPI.SUM, root=0)
 
-        lambda_d *= lambda_d*np.exp(-lambda_decay*iter)
-        lambda_m *= lambda_m*np.exp(-lambda_decay*iter)
+        lambda_d = lambda_d*np.exp(-lambda_decay*iter)
+        lambda_m = lambda_m*np.exp(-lambda_decay*iter)
 
         chi_d_w_q = chi_d_w_q / (1.0 + lambda_d*chi_d_w_q)
         chi_m_w_q = chi_m_w_q / (1.0 + lambda_m*chi_m_w_q)
@@ -339,7 +351,7 @@ def main():
         convg = comm.bcast(convg, root=0)
 
         if mixing_type=='diis':
-            sigma_dga = acc.apply(sigma_dga.flatten())
+            sigma_dga = acc.apply(sigma_dga.reshape(-1))
             sigma_dga = np.reshape(sigma_dga, shape=(2*n4iwf, n_qpoints_fullbz))
         else:
             # linear mixing of SE for more stable self-consistency
@@ -351,11 +363,13 @@ def main():
             print("New mu found:", new_mu)
             sys.stdout.flush()
         new_mu = comm.bcast(new_mu, root=0)
+        
+        if rank == 0:
+            print(f"Time of iteration {iter} :", perf_counter() - t0, "seconds")
 
         if(rank==0):
             print(f"Saving data of iteration {iter}")
             sys.stdout.flush()
-            fsave = h5py.File(f'{file_name}_{now}.h5','a')
             group = fsave.create_group(f'iter_{iter}')
             group.create_dataset('sigma',data=sigma_dga)
             group.create_dataset('lambda_d',data=lambda_d)
@@ -365,6 +379,7 @@ def main():
             group.create_dataset('mu',data=new_mu)
             group.create_dataset('convg',data=convg)
             group.create_dataset('err_sigma',data=error_sigma)
+            fsave.flush()
         if(convg): break
         
     if(rank==0):

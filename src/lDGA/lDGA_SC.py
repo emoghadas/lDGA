@@ -134,10 +134,13 @@ def main():
     q_range = distribute_qpoints(dga_cfg, size, rank)
     q_grid_loc = dga_cfg.q_grid_loc
 
+    # init symmetry equivalent q-momenta and their weights
+    if irrbz:
+        all_q_sym, symq_weights = util.init_sym_q(dga_cfg)
+
     comm.Barrier()
 
-    if rank == 0:
-        t0 = perf_counter()
+    
 
     if rank==0:
         print("Calculate local quantities ... ")
@@ -232,8 +235,15 @@ def main():
         print("Calculate SDE for selfenergy")
         sys.stdout.flush()
 
+    if rank == 0:
+        t0 = perf_counter()
+
     # sde for selfenergy
-    sigma_dga_q = sde.Hubbard_Holstein_SDE(dga_cfg, v_d_w_q, v_m_w_q, A_d,A_m, chi_d_w_q, chi_m_w_q, chi0_w_q, mu)
+    s_dga = np.broadcast_to(s[:, None], (2*niwf, nk**3)).copy()
+    sigma_dga_q = sde.Hubbard_Holstein_SDE(dga_cfg, v_d_w_q, v_m_w_q, A_d,A_m, chi_d_w_q, chi_m_w_q, chi0_w_q, all_q_sym, symq_weights, mu, s_dga)
+
+    if rank == 0:
+        print("Time of iteration 0 :", perf_counter() - t0, "seconds")
 
     if(max_iter==1):
         sigma_dga = np.zeros_like(sigma_dga_q,dtype=np.complex128) if rank==0 else None
@@ -241,6 +251,8 @@ def main():
     else:
         sigma_dga = np.zeros_like(sigma_dga_q,dtype=np.complex128)
         comm.Allreduce(sigma_dga_q,sigma_dga,op=MPI.SUM)
+
+    del sigma_dga_q
 
     #Computing new mu
     new_mu=0.0
@@ -289,8 +301,7 @@ def main():
             new_mu = util.get_mu(dga_cfg, sigma_dga)
         new_mu = comm.bcast(new_mu, root=0)
 
-    if rank == 0:
-        print("Time of iteration 0 :", perf_counter() - t0, "seconds")
+
 
     # Loop for Self-Consistent lDGA
     for iter in range(1,max_iter):
@@ -300,8 +311,7 @@ def main():
             print(f"***** Doing iter={iter} *****")
             sys.stdout.flush()
 
-        if rank == 0:
-            t0 = perf_counter()
+        
 
         chi0_w_q = bse.chi0_w_q(dga_cfg, new_mu, s_dga=sigma_dga)
 
@@ -333,13 +343,22 @@ def main():
         chi_d_w_q = chi_d_w_q / (1.0 + lambda_d*chi_d_w_q)
         chi_m_w_q = chi_m_w_q / (1.0 + lambda_m*chi_m_w_q)
 
-        sigma_dga_q = sde.Hubbard_Holstein_SDE(dga_cfg, v_d_w_q, v_m_w_q, A_d,A_m, chi_d_w_q, chi_m_w_q, chi0_w_q, new_mu, sigma_dga)
+        if rank == 0:
+            t0 = perf_counter()
+
+        s_dga[niwf-n4iwf:niwf+n4iwf,:] = sigma_dga
+        sigma_dga_q = sde.Hubbard_Holstein_SDE(dga_cfg, v_d_w_q, v_m_w_q, A_d,A_m, chi_d_w_q, chi_m_w_q, chi0_w_q, all_q_sym, symq_weights, new_mu, s_dga)
+
+        if rank == 0:
+            print(f"Time of iteration {iter} :", perf_counter() - t0, "seconds")
 
         # copy old sigma on all cores for mixing
         old_sigma_dga = sigma_dga*1
 
         sigma_dga = np.zeros_like(sigma_dga_q)
         comm.Allreduce(sigma_dga_q, sigma_dga, op=MPI.SUM)
+
+        del sigma_dga_q
 
         convg=False
 
@@ -364,8 +383,7 @@ def main():
             sys.stdout.flush()
         new_mu = comm.bcast(new_mu, root=0)
         
-        if rank == 0:
-            print(f"Time of iteration {iter} :", perf_counter() - t0, "seconds")
+        
 
         if(rank==0):
             print(f"Saving data of iteration {iter}")

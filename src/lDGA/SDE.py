@@ -36,7 +36,7 @@ def Hubbard_SDE(dga_cfg:DGA_ConfigType, gamma_d:np.ndarray, gamma_m:np.ndarray, 
     return self_energy
 
 # Lattice Swinger-Dyson for the Hubbard-Holstein model
-def Hubbard_Holstein_SDE(dga_cfg:DGA_ConfigType, gamma_d:np.ndarray, gamma_m:np.ndarray, A_d:np.ndarray, A_m:np.ndarray, chi_d_w_q:np.ndarray, chi_m_w_q:np.ndarray, chi0_nu_w_q:np.ndarray, all_q_sym:np.ndarray, symq_weights:np.ndarray, mu:np.float64, self_dga:np.ndarray=None) -> np.ndarray:
+def Hubbard_Holstein_SDE(dga_cfg:DGA_ConfigType, gamma_d:np.ndarray, gamma_m:np.ndarray, A_d:np.ndarray, A_m:np.ndarray, chi_d_w_q:np.ndarray, chi_m_w_q:np.ndarray, chi0_nu_w_q:np.ndarray, mu:np.float64, self_dga:np.ndarray=None) -> np.ndarray:
     #Here we also sum Fock term
 
     u=dga_cfg.U; beta=dga_cfg.beta; dens=dga_cfg.occ_imp
@@ -49,6 +49,8 @@ def Hubbard_Holstein_SDE(dga_cfg:DGA_ConfigType, gamma_d:np.ndarray, gamma_m:np.
     F_m_loc = dga_cfg.F_m_loc
     dim = dga_cfg.kdim
     irrbz = dga_cfg.irrbz
+    all_q_sym = dga_cfg.all_q_sym
+    symq_weights = dga_cfg.symq_weights
     qpoints = dga_cfg.q_grid_loc
     Nk = dga_cfg.n_kpoints
     Nqtot = dga_cfg.n_qpoints_fullbz
@@ -114,6 +116,7 @@ def self_sum_Uw(self_old:np.ndarray, g_old:np.ndarray, theta:np.ndarray,  omega0
     n4iwf,n4iwb,Nqloc = theta.shape
     n4iwf//=2; n4iwb=n4iwb//2
     niwf = g_old.shape[0] //2
+    Nk_lin = int(np.round(Nk**(1/dim)))
 
     self_en = np.zeros((2*n4iwf,Nk), dtype=np.complex128)
 
@@ -121,9 +124,10 @@ def self_sum_Uw(self_old:np.ndarray, g_old:np.ndarray, theta:np.ndarray,  omega0
         nu=(np.pi/beta)*(2*inu+1)
         for ik in range(Nk):
             k = ik2k(ik,dim,int(Nk**(1/dim)))
-            self_en[inu+n4iwf,ik] +=(0.5/beta)*np.sum( theta[inu+n4iwf,:,:] * G_wq_given_nuk(nu,k,self_old,n4iwb,qpoints,beta,mu,ts,self_dga))/Nqtot #vertex term
+            G_wq = G_wq_given_nuk(nu,k,self_old,n4iwf,n4iwb,qpoints,Nk_lin,beta,mu,ts,self_dga)
+            self_en[inu+n4iwf,ik] +=(0.5/beta)*np.sum( theta[inu+n4iwf,:,:] * G_wq)/Nqtot #vertex term
             if( (g0!=0.0) and (not self_dga is None) ):
-                self_en[inu+n4iwf,ik] -= np.sum(G_wq_given_nuk(nu,k,self_old,n4iwb,qpoints,beta,mu,ts,self_dga)*udyn_arr)/beta/Nqtot
+                self_en[inu+n4iwf,ik] -= np.sum(G_wq*udyn_arr)/beta/Nqtot
         if( (g0!=0.0 and mpi_rank==0) and ( self_dga is None) ):
             for inup in range(-niwf,niwf):
                 nup=(np.pi/beta)*(2*inup+1)

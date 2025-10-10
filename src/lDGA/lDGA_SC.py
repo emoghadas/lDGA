@@ -137,10 +137,10 @@ def main():
     # init symmetry equivalent q-momenta and their weights
     if irrbz:
         all_q_sym, symq_weights = util.init_sym_q(dga_cfg)
+        dga_cfg.all_q_sym = all_q_sym
+        dga_cfg.symq_weights = symq_weights
 
-    comm.Barrier()
-
-    
+    comm.Barrier()    
 
     if rank==0:
         print("Calculate local quantities ... ")
@@ -178,12 +178,18 @@ def main():
         sys.stdout.flush()    
     sigma_sde_loc = sde.local_sde_check(dga_cfg)
 
+    if rank == 0:
+        t0 = perf_counter()
+
     if rank==0:
         print("Calculate lattice bubble ...")
         sys.stdout.flush()
 
+    # broadcast dmft SE to shape of k-grid for faster numba compiled funcs
+    s_nuk_loc = np.broadcast_to(s[:, None], (2*niwf, nk**kdim)).copy()
+
     # lattice bubble for each processes' q-points
-    chi0_w_q = bse.chi0_w_q(dga_cfg, mu)
+    chi0_w_q = bse.chi0_w_q(dga_cfg, mu, s_dga=s_nuk_loc)
 
     if rank==0:
         print("Calculate lattice susceptibility and hedin vertex ...")
@@ -235,15 +241,8 @@ def main():
         print("Calculate SDE for selfenergy")
         sys.stdout.flush()
 
-    if rank == 0:
-        t0 = perf_counter()
-
     # sde for selfenergy
-    s_dga = np.broadcast_to(s[:, None], (2*niwf, nk**3)).copy()
-    sigma_dga_q = sde.Hubbard_Holstein_SDE(dga_cfg, v_d_w_q, v_m_w_q, A_d,A_m, chi_d_w_q, chi_m_w_q, chi0_w_q, all_q_sym, symq_weights, mu, s_dga)
-
-    if rank == 0:
-        print("Time of iteration 0 :", perf_counter() - t0, "seconds")
+    sigma_dga_q = sde.Hubbard_Holstein_SDE(dga_cfg, v_d_w_q, v_m_w_q, A_d,A_m, chi_d_w_q, chi_m_w_q, chi0_w_q, mu, s_nuk_loc)
 
     if(max_iter==1):
         sigma_dga = np.zeros_like(sigma_dga_q,dtype=np.complex128) if rank==0 else None
@@ -253,6 +252,9 @@ def main():
         comm.Allreduce(sigma_dga_q,sigma_dga,op=MPI.SUM)
 
     del sigma_dga_q
+
+    if rank == 0:
+        print("Time of iteration 0 :", perf_counter() - t0, "seconds")
 
     #Computing new mu
     new_mu=0.0
@@ -282,25 +284,25 @@ def main():
         group.create_dataset('mu',data=new_mu)
         fsave.flush()
 
-    if mix_dmft:
-        # linear mixing of lambda-DGA SE with DMFT one for more stable self-consistency
-        sigma_dga = (1-mixing)*sigma_dga + mixing*s[niwf-n4iwf:niwf+n4iwf].reshape(2*n4iwf,1)
-    if mixing_type=='diis':
-        if rank==0:
-            print("Applying anderson accelaration for self-energy")
-        acc = aa.AndersonAcceleration(window_size=mixing_window, reg=reg, mixing_param=beta_diis, linmix_param=mixing)
-        sigma_dga = acc.apply(sigma_dga.reshape(-1))
-        sigma_dga = np.reshape(sigma_dga, shape=(2*n4iwf,n_qpoints_fullbz))
+    if max_iter>1:    
+        if mix_dmft:
+            # linear mixing of lambda-DGA SE with DMFT one for more stable self-consistency
+            sigma_dga = (1-mixing)*sigma_dga + mixing*s[niwf-n4iwf:niwf+n4iwf].reshape(2*n4iwf,1)
+        if mixing_type=='diis':
+            if rank==0:
+                print("Applying anderson accelaration for self-energy")
+            acc = aa.AndersonAcceleration(window_size=mixing_window, reg=reg, mixing_param=beta_diis, linmix_param=mixing)
+            sigma_dga = acc.apply(sigma_dga.reshape(-1))
+            sigma_dga = np.reshape(sigma_dga, shape=(2*n4iwf,n_qpoints_fullbz))
 
-    if mix_dmft:
-        #Computing new mu again with mixed selfenergy
-        if rank==0:
-            print("Recalculating new chemical potential with mixed self-energy")
-        new_mu=0.0
-        if(rank==0):
-            new_mu = util.get_mu(dga_cfg, sigma_dga)
-        new_mu = comm.bcast(new_mu, root=0)
-
+        if mix_dmft:
+            #Computing new mu again with mixed selfenergy
+            if rank==0:
+                print("Recalculating new chemical potential with mixed self-energy")
+            new_mu=0.0
+            if(rank==0):
+                new_mu = util.get_mu(dga_cfg, sigma_dga)
+            new_mu = comm.bcast(new_mu, root=0)
 
 
     # Loop for Self-Consistent lDGA
@@ -310,10 +312,14 @@ def main():
             print("")
             print(f"***** Doing iter={iter} *****")
             sys.stdout.flush()
-
         
+        if rank == 0:
+            t0 = perf_counter()
 
-        chi0_w_q = bse.chi0_w_q(dga_cfg, new_mu, s_dga=sigma_dga)
+        # append tail of dmft to dga SE
+        s_nuk_loc[niwf-n4iwf:niwf+n4iwf,:] = sigma_dga
+
+        chi0_w_q = bse.chi0_w_q(dga_cfg, new_mu, s_dga=s_nuk_loc)
 
         # compute chi and v of lattice
         match asymp:
@@ -343,14 +349,7 @@ def main():
         chi_d_w_q = chi_d_w_q / (1.0 + lambda_d*chi_d_w_q)
         chi_m_w_q = chi_m_w_q / (1.0 + lambda_m*chi_m_w_q)
 
-        if rank == 0:
-            t0 = perf_counter()
-
-        s_dga[niwf-n4iwf:niwf+n4iwf,:] = sigma_dga
-        sigma_dga_q = sde.Hubbard_Holstein_SDE(dga_cfg, v_d_w_q, v_m_w_q, A_d,A_m, chi_d_w_q, chi_m_w_q, chi0_w_q, all_q_sym, symq_weights, new_mu, s_dga)
-
-        if rank == 0:
-            print(f"Time of iteration {iter} :", perf_counter() - t0, "seconds")
+        sigma_dga_q = sde.Hubbard_Holstein_SDE(dga_cfg, v_d_w_q, v_m_w_q, A_d,A_m, chi_d_w_q, chi_m_w_q, chi0_w_q, new_mu, s_nuk_loc)
 
         # copy old sigma on all cores for mixing
         old_sigma_dga = sigma_dga*1
@@ -359,6 +358,9 @@ def main():
         comm.Allreduce(sigma_dga_q, sigma_dga, op=MPI.SUM)
 
         del sigma_dga_q
+
+        if rank == 0:
+            print(f"Time of iteration {iter} :", perf_counter() - t0, "seconds")
 
         convg=False
 
@@ -382,8 +384,6 @@ def main():
             print("New mu found:", new_mu)
             sys.stdout.flush()
         new_mu = comm.bcast(new_mu, root=0)
-        
-        
 
         if(rank==0):
             print(f"Saving data of iteration {iter}")

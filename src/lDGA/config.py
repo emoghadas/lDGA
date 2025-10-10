@@ -18,6 +18,8 @@ dga_config_spec = [
     ('q_grid_loc', nb.float64[:,:]),
     ('weights', nb.complex128[:]),
     ('irrbz', nb.boolean),
+    ('all_q_sym', nb.optional(nb.float64[:,:,:])),
+    ('symq_weights', nb.optional(nb.float64[:])),
     ('niwf', nb.int64),
     ('n2iwb', nb.int64),
     ('n3iwf', nb.int64),

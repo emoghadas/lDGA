@@ -200,22 +200,15 @@ def build_nu_mats(Nnu:int, beta:np.float64) -> np.ndarray:
 #N.B. this works only for DMFT self-energy with enough frequencies.
 # Auxiliary function for Swinger-Dyson Equations
 @jit(nopython=True)
-def G_wq_given_nuk(nu:np.float64, k:np.ndarray, sigma:np.ndarray, n4iwb:int, qpoints:np.ndarray, beta:np.float64, mu:np.float64, ts:np.ndarray, sigma_dga:np.ndarray=None)-> np.ndarray:
+def G_wq_given_nuk(nu:np.float64, k:np.ndarray, sigma:np.ndarray, n4iwf:int, n4iwb:int, qpoints:np.ndarray, Nk_lin:int, beta:np.float64, mu:np.float64, ts:np.ndarray, sigma_dga:np.ndarray=None)-> np.ndarray:
     dim = len(k); inu=nu2inu(nu, beta)
     Nq, dimq = qpoints.shape
-    Gres = np.zeros( (Nq,2*n4iwb+1), dtype=np.complex128 )
+    Gres = np.empty( (Nq,2*n4iwb+1), dtype=np.complex128 )
     niwf = sigma.shape[0]//2
     n4iwf = 0
     t1=ts[0]
     t2=ts[1]
 
-    n4iwf = 50
-    Nk_lin = 6
-
-    #if(not(sigma_dga is None)):
-    #    Nk = sigma_dga.shape[1]
-    #    Nk_lin = int(np.round(Nk**(1/dim)))
-    #    n4iwf = sigma_dga.shape[0]//2
     for iq,q in enumerate(qpoints):
         eps_kq = np.complex128(ek(k+q, t=t1,tpr=t2))
         kq = wrap_k(k+q)
@@ -223,12 +216,13 @@ def G_wq_given_nuk(nu:np.float64, k:np.ndarray, sigma:np.ndarray, n4iwb:int, qpo
 
         for iw in range(-n4iwb,1+n4iwb):
             nu_plus_w = nu+np.pi*(2.0*iw)/beta
-            i_nuw = nu2inu(nu_plus_w, beta) #Here if nu+w is beyond our sigma we may want to implement a "tail" version of sigma
-            if( not(sigma_dga is None) and (i_nuw >= -n4iwf and i_nuw < n4iwf)): 
-                
-                Gres[iq,iw+n4iwb] = 1.0 / ( 1j*nu_plus_w + mu - eps_kq - sigma_dga[i_nuw+n4iwf,i_qk] )
-            elif( (sigma_dga is None) or (i_nuw >= -niwf and i_nuw < niwf) ):
-                Gres[iq,iw+n4iwb] = 1.0 / ( 1j*nu_plus_w + mu - eps_kq - sigma[i_nuw+niwf] )
+            i_nuw = inu + iw
+            #if( not(sigma_dga is None) and (i_nuw >= -n4iwf and i_nuw < n4iwf)): #Here if nu+w is beyond our sigma we may want to implement a "tail" version of sigma
+            #    
+            #    Gres[iq,iw+n4iwb] = 1.0 / ( 1j*nu_plus_w + mu - eps_kq - sigma_dga[i_nuw+n4iwf,i_qk] )
+            #elif( (sigma_dga is None) or (i_nuw >= -niwf and i_nuw < niwf) ):
+            #    Gres[iq,iw+n4iwb] = 1.0 / ( 1j*nu_plus_w + mu - eps_kq - sigma[i_nuw+niwf] )
+            Gres[iq,iw+n4iwb] = 1.0 / ( 1j*nu_plus_w + mu - eps_kq - sigma_dga[i_nuw+niwf, i_qk] )
     return np.ascontiguousarray(np.transpose(Gres, (1,0)))
 
 @jit(nopython=True)
@@ -375,7 +369,7 @@ def init_sym_q(dga_cfg:DGA_ConfigType) -> Tuple[np.ndarray, np.ndarray]:
         all_q_sym.append(all_qs)
         symq_weights.append(weight)
 
-    return np.array(all_q_sym), np.array(symq_weights)
+    return np.ascontiguousarray(all_q_sym), np.ascontiguousarray(symq_weights)
 
 @jit(nopython=True)
 def G_wq_given_nuk_irr(nu:np.float64, k:np.ndarray, sigma:np.ndarray, n4iwf:int, n4iwb:int, qpoints:np.ndarray, all_q_sym:np.ndarray, symq_weights:np.ndarray, Nk_lin:int, beta:np.float64, mu:np.float64, ts:np.ndarray, sigma_dga:np.ndarray=None)-> np.ndarray:

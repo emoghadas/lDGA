@@ -205,6 +205,7 @@ def G_wq_given_nuk(nu:np.float64, k:np.ndarray, sigma:np.ndarray, n4iwf:int, n4i
     Nq, dimq = qpoints.shape
     Gres = np.empty( (Nq,2*n4iwb+1), dtype=np.complex128 )
     niwf = sigma.shape[0]//2
+    ntail = sigma_dga.shape[0]//2
     n4iwf = 0
     t1=ts[0]
     t2=ts[1]
@@ -222,7 +223,7 @@ def G_wq_given_nuk(nu:np.float64, k:np.ndarray, sigma:np.ndarray, n4iwf:int, n4i
             #    Gres[iq,iw+n4iwb] = 1.0 / ( 1j*nu_plus_w + mu - eps_kq - sigma_dga[i_nuw+n4iwf,i_qk] )
             #elif( (sigma_dga is None) or (i_nuw >= -niwf and i_nuw < niwf) ):
             #    Gres[iq,iw+n4iwb] = 1.0 / ( 1j*nu_plus_w + mu - eps_kq - sigma[i_nuw+niwf] )
-            Gres[iq,iw+n4iwb] = 1.0 / ( 1j*nu_plus_w + mu - eps_kq - sigma_dga[i_nuw+niwf, i_qk] )
+            Gres[iq,iw+n4iwb] = 1.0 / ( 1j*nu_plus_w + mu - eps_kq - sigma_dga[i_nuw+ntail, i_qk] )
     return np.ascontiguousarray(np.transpose(Gres, (1,0)))
 
 @jit(nopython=True)
@@ -378,6 +379,7 @@ def G_wq_given_nuk_irr(nu:np.float64, k:np.ndarray, sigma:np.ndarray, n4iwf:int,
     n_sym = 8 if dim==2 else 48
     Gres = np.empty( (n_sym,2*n4iwb+1,Nq), dtype=np.complex128 )
     niwf = sigma.shape[0]//2
+    ntail = sigma_dga.shape[0] //2
     t1=ts[0]
     t2=ts[1]
 
@@ -394,7 +396,7 @@ def G_wq_given_nuk_irr(nu:np.float64, k:np.ndarray, sigma:np.ndarray, n4iwf:int,
 
                 #if( not(sigma_dga is None) and (i_nuw >= -n4iwf and i_nuw < n4iwf)): 
                     #Gres[iq_sym,iq,iw+n4iwb] = weight / ( 1j*nu_plus_w + mu - eps_kq - sigma_dga[i_nuw+n4iwf,i_qk] )
-                Gres[iq_sym,iw+n4iwb,iq] = symq_weights[iq] / ( 1j*nu_plus_w + mu - eps_kq - sigma_dga[i_nuw+niwf,i_qk] )
+                Gres[iq_sym,iw+n4iwb,iq] = symq_weights[iq] / ( 1j*nu_plus_w + mu - eps_kq - sigma_dga[i_nuw+ntail,i_qk] )
                 #elif( (sigma_dga is None) or (i_nuw >= -niwf and i_nuw < niwf) ):
                     #Gres[iq_sym,iq,iw+n4iwb] = weight / ( 1j*nu_plus_w + mu - eps_kq - sigma[i_nuw+niwf] )
     return np.ascontiguousarray(Gres)

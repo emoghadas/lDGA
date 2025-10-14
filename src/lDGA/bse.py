@@ -194,6 +194,7 @@ def chi0_w_q(dga_cfg : DGA_ConfigType , mu:np.float64, s_dga:np.ndarray=None) ->
     Nk_lin = int(np.round(nk**(1/dim)))
     qpoints = dga_cfg.q_grid_loc
     niwf  = s_dmft.shape[0]//2
+    ntail = s_dga.shape[0]//2
     chi0_wq = np.zeros((2*n4iwf,2*n4iwb+1,qpoints.shape[0]), dtype=np.complex128)
 
     nu_array=build_nu_mats(n4iwf, beta)
@@ -204,7 +205,7 @@ def chi0_w_q(dga_cfg : DGA_ConfigType , mu:np.float64, s_dga:np.ndarray=None) ->
             #    G_nu_k = 1.0/(1j*nu - ek(k,t=t1,tpr=t2) + mu - s_dmft[inu-n4iwf+niwf] )
             #else:
             #    G_nu_k = 1.0/(1j*nu - ek(k, t=t1,tpr=t2) + mu - s_dga[inu,ik] )
-            G_nu_k = 1.0/( 1j*nu - ek(k, t=t1,tpr=t2) + mu - s_dga[inu-n4iwf+niwf,ik] )
+            G_nu_k = 1.0/( 1j*nu - ek(k, t=t1,tpr=t2) + mu - s_dga[inu-n4iwf+ntail,ik] )
             chi0_wq[inu,:,:] += G_nu_k*G_nuw_kq
     chi0_wq *= -beta/nk
     return chi0_wq

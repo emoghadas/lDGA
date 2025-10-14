@@ -186,7 +186,8 @@ def main():
         sys.stdout.flush()
 
     # broadcast dmft SE to shape of k-grid for faster numba compiled funcs
-    s_nuk_loc = np.broadcast_to(s[:, None], (2*niwf, nk**kdim)).copy()
+    ntail = 2*n4iwf
+    s_nuk_loc = np.broadcast_to(s[niwf-ntail:niwf+ntail, None], (2*ntail, nk**kdim)).copy()
 
     # lattice bubble for each processes' q-points
     chi0_w_q = bse.chi0_w_q(dga_cfg, mu, s_dga=s_nuk_loc)
@@ -317,7 +318,7 @@ def main():
             t0 = perf_counter()
 
         # append tail of dmft to dga SE
-        s_nuk_loc[niwf-n4iwf:niwf+n4iwf,:] = sigma_dga
+        s_nuk_loc[ntail-n4iwf:ntail+n4iwf,:] = sigma_dga
 
         chi0_w_q = bse.chi0_w_q(dga_cfg, new_mu, s_dga=s_nuk_loc)
 

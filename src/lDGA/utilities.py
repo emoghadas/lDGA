@@ -133,11 +133,11 @@ def ek(k:np.ndarray, t:np.float64=1.0, tpr:np.float64=0., tsec:np.float64=0.) ->
 def k_grid(nk:np.int64, kdim:np.int64) -> np.ndarray:
     kpoints = np.linspace(-np.pi, np.pi, nk, endpoint=False)
     if kdim==2:
-        k_grid = np.meshgrid(kpoints, kpoints)  
+        k_grid = np.meshgrid(kpoints, kpoints, indexing='xy')  
         k_grid = np.array(k_grid).reshape(2,-1).T
     elif kdim==3:
-        k_grid = np.meshgrid(kpoints, kpoints, kpoints)
-        k_grid = np.array(k_grid).reshape(3,-1).T
+        k_grid = np.transpose(np.array(np.meshgrid(kpoints, kpoints, kpoints, indexing='ij')), (0,3,2,1))
+        k_grid = k_grid.reshape(3,-1).T
     return k_grid
 
 # this must not be jit compiled
@@ -160,6 +160,20 @@ def create_qgrid(dga_cfg:DGA_ConfigType) -> None:
     dga_cfg.q_grid = q_grid
     dga_cfg.weights = weights
     return
+
+@jit(nopython=True)
+def get_kq_idx_map(dga_cfg:DGA_ConfigType) -> np.ndarray:
+    k_grid = dga_cfg.k_grid
+    Nk_lin = dga_cfg.nk
+    
+    map_kq = np.empty((k_grid.shape[0], k_grid.shape[0]), dtype=np.int64)
+    for ik, k in enumerate(k_grid):
+        for iq, q in enumerate(k_grid):
+            kq = wrap_k(k+q)
+            i_qk = k2ik(kq, Nk_lin)
+            map_kq[ik,iq] = i_qk
+    return map_kq
+        
 
 ##### DYNAMICAL UTILS ######
 @jit(nopython=True)
@@ -211,8 +225,8 @@ def G_wq_given_nuk(nu:np.float64, k:np.ndarray, sigma:np.ndarray, n4iwf:int, n4i
     t2=ts[1]
 
     for iq,q in enumerate(qpoints):
-        eps_kq = np.complex128(ek(k+q, t=t1,tpr=t2))
         kq = wrap_k(k+q)
+        eps_kq = np.complex128(ek(kq, t=t1,tpr=t2))
         i_qk = k2ik(kq,Nk_lin)
 
         for iw in range(-n4iwb,1+n4iwb):
@@ -385,8 +399,8 @@ def G_wq_given_nuk_irr(nu:np.float64, k:np.ndarray, sigma:np.ndarray, n4iwf:int,
 
     for iq, all_qs in enumerate(all_q_sym):
         for iq_sym,q_sym in enumerate(all_qs):
-            eps_kq = np.complex128(ek(k+q_sym, t=t1,tpr=t2))            
             kq = wrap_k(k+q_sym)
+            eps_kq = np.complex128(ek(kq, t=t1,tpr=t2))            
             i_qk = k2ik(kq,Nk_lin)
 
             for iw in range(-n4iwb,1+n4iwb):

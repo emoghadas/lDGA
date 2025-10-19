@@ -178,6 +178,29 @@ def gamma_w(dga_cfg:DGA_ConfigType) -> Tuple[np.ndarray, np.ndarray]: # beta, U,
 
 
 @jit(nopython=True)
+def G_nu_k(dga_cfg : DGA_ConfigType , mu:np.float64, s_dga:np.ndarray=None) -> np.ndarray:
+    '''
+    Compute lattice bubble chi0 for all iw and range of q-points
+    '''
+    beta=dga_cfg.beta; s_dmft=dga_cfg.s_imp
+    n4iwf=dga_cfg.n4iwf;  n4iwb=dga_cfg.n4iwb
+
+    ts=dga_cfg.ts
+    t1=ts[0]
+    t2=ts[1]
+    k_grid = dga_cfg.k_grid
+    nk = k_grid.shape[0]
+    ntail = s_dga.shape[0]//2
+    G_nuk = np.empty((2*ntail,nk), dtype=np.complex128)
+
+    nu_array=build_nu_mats(ntail, beta)
+    for inu,nu in enumerate(nu_array):
+        for ik,k in enumerate(k_grid):
+            G_nuk[inu,ik] = 1.0/( 1j*nu - ek(k, t=t1,tpr=t2) + mu - s_dga[inu,ik] )
+    return G_nuk
+
+
+@jit(nopython=True)
 def chi0_w_q(dga_cfg : DGA_ConfigType , mu:np.float64, s_dga:np.ndarray=None) -> np.ndarray:
     '''
     Compute lattice bubble chi0 for all iw and range of q-points

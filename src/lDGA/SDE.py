@@ -56,7 +56,6 @@ def Hubbard_Holstein_SDE(dga_cfg:DGA_ConfigType, gamma_d:np.ndarray, gamma_m:np.
     Nqtot = dga_cfg.n_qpoints_fullbz
     Nq = chi_d_w_q.shape[1]
     asymp = dga_cfg.asymp
-    map_kq = dga_cfg.map_kq
 
     self_energy = np.zeros( (2*n4iwf,Nk), dtype=np.complex128)
 
@@ -101,7 +100,7 @@ def Hubbard_Holstein_SDE(dga_cfg:DGA_ConfigType, gamma_d:np.ndarray, gamma_m:np.
     #N.B. now working only for a local self-energy, for SC-DGA to be corrected for a k-dependent one
     if irrbz:
         #self_energy = self_sum_Uw_irr(self_old, g_old, theta_nu_wq, omega0, g0, udyn_arr, beta, qpoints, all_q_sym, symq_weights, Nk, Nqtot, dim, mu, mpi_rank, ts, self_dga)
-        self_energy = self_sum_Uw_test(self_old, g_old, theta_nu_wq-2*udyn_arr.reshape(1,2*n4iwb+1,1), omega0, g0, udyn_arr, beta, qpoints, all_q_sym, symq_weights, Nk, Nqtot, dim, mu, mpi_rank, ts, map_kq, G_nu_k, self_dga)
+        self_energy = self_sum_Uw_test(self_old, g_old, theta_nu_wq-2*udyn_arr.reshape(1,2*n4iwb+1,1), omega0, g0, udyn_arr, beta, qpoints, all_q_sym, symq_weights, Nk, Nqtot, dim, mu, mpi_rank, ts, G_nu_k, self_dga)
     else:
         self_energy = self_sum_Uw(self_old, g_old, theta_nu_wq, omega0, g0, udyn_arr, beta, qpoints, Nk, Nqtot, dim, mu, mpi_rank, ts, self_dga)
     
@@ -169,7 +168,7 @@ def self_sum_Uw_irr(self_old:np.ndarray, g_old:np.ndarray, theta:np.ndarray,  om
 
 
 @jit(nopython=True)
-def self_sum_Uw_test(self_old:np.ndarray, g_old:np.ndarray, theta:np.ndarray,  omega0:np.float64, g0:np.float64, udyn_arr:np.ndarray, beta:np.float64, qpoints:np.ndarray,  all_q_sym:np.ndarray, symq_weights:np.ndarray, Nk:int,  Nqtot:int, dim:int , mu:np.float64, mpi_rank:int, ts:np.ndarray, map_kq:np.ndarray, G_nu_k:np.ndarray, self_dga:np.ndarray=None) -> np.ndarray:
+def self_sum_Uw_test(self_old:np.ndarray, g_old:np.ndarray, theta:np.ndarray,  omega0:np.float64, g0:np.float64, udyn_arr:np.ndarray, beta:np.float64, qpoints:np.ndarray,  all_q_sym:np.ndarray, symq_weights:np.ndarray, Nk:int,  Nqtot:int, dim:int , mu:np.float64, mpi_rank:int, ts:np.ndarray, G_nu_k:np.ndarray, self_dga:np.ndarray=None) -> np.ndarray:
     n4iwf,n4iwb,Nqloc = theta.shape
     n4iwf//=2; n4iwb=n4iwb//2
     ntail = G_nu_k.shape[0]//2
@@ -179,13 +178,12 @@ def self_sum_Uw_test(self_old:np.ndarray, g_old:np.ndarray, theta:np.ndarray,  o
     self_en = np.zeros((2*n4iwf,Nk), dtype=np.complex128)
 
     for ik in range(Nk):
-        #k = ik2k(ik,dim,int(Nk**(1/dim)))
+        k = ik2k(ik,dim,Nk_lin)
         for iw in range(-n4iwb,n4iwb+1):
             G_nupw = G_nu_k[ntail - n4iwf + iw:ntail + n4iwf + iw, :]
             for iq, all_qs in enumerate(all_q_sym):
                 for iq_sym,q_sym in enumerate(all_qs):
-                    iq_full = k2ik(q_sym, Nk_lin)
-                    i_kq = map_kq[ik,iq_full]
+                    i_kq = k2ik(k+q_sym, Nk_lin)
                     G_nupw_kpq = symq_weights[iq] * G_nupw[:, i_kq]
                     self_en[:,ik] += 0.5 / (beta*Nqtot) * G_nupw_kpq*theta[:,iw+n4iwb,iq]
                     #if (g0!=0):

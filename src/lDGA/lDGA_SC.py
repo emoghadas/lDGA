@@ -189,9 +189,7 @@ def main():
     ntail = 2*n4iwf
     s_nuk_loc = np.broadcast_to(s[niwf-ntail:niwf+ntail, None], (2*ntail, nk**kdim)).copy()
     
-    # index map and G_nu_k
-    map_kq = util.get_kq_idx_map(dga_cfg)
-    dga_cfg.map_kq = map_kq
+    # G_nu_k for all ranks
     G_nu_k = bse.G_nu_k(dga_cfg, mu, s_nuk_loc)
 
     # lattice bubble for each processes' q-points
@@ -354,7 +352,7 @@ def main():
 
         chi_d_w_q = chi_d_w_q / (1.0 + lambda_d*chi_d_w_q)
         chi_m_w_q = chi_m_w_q / (1.0 + lambda_m*chi_m_w_q)
-        
+
         G_nu_k = bse.G_nu_k(dga_cfg, new_mu, s_nuk_loc)
         sigma_dga_q = sde.Hubbard_Holstein_SDE(dga_cfg, v_d_w_q, v_m_w_q, A_d,A_m, chi_d_w_q, chi_m_w_q, chi0_w_q, new_mu, G_nu_k, s_nuk_loc)
 

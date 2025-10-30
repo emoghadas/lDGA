@@ -14,6 +14,7 @@ import lDGA.utilities as util
 import lDGA.lambda_corr as lamb
 import lDGA.SDE as sde
 import lDGA.anderson_acc as aa
+import lDGA.eliashberg as eliash
 from mpi4py import MPI
 import sys
 import scipy.optimize as scop
@@ -81,6 +82,10 @@ def main():
     lambda_type = dga_cfg.lambda_type
     lambda_decay = dga_cfg.lambda_decay
     file_name = dga_cfg.file_name
+
+    do_eliashberg = dga_cfg.do_eliashberg
+    pairing_mode = dga_cfg.pairing_mode
+
 
     # init mpi communicator and get number of processes and ranks
     comm = MPI.COMM_WORLD
@@ -178,6 +183,14 @@ def main():
         sys.stdout.flush()    
     sigma_sde_loc = sde.local_sde_check(dga_cfg)
 
+    if do_eliashberg:
+        if rank==0:
+            print("Computing local pairing vertices ...")
+        chi_pp = eliash.chi_pp_loc(dga_cfg)
+        dga_cfg.chi_pp = chi_pp
+        gamma_pp = eliash.bse_pp(dga_cfg)
+        dga_cfg.gamma_pp = gamma_pp
+
     if rank == 0:
         t0 = perf_counter()
 
@@ -257,14 +270,68 @@ def main():
 
     del sigma_dga_q
 
-    if rank == 0:
-        print("Time of iteration 0 :", perf_counter() - t0, "seconds")
-
     #Computing new mu
     new_mu=0.0
     if(rank==0):
         new_mu = util.get_mu(dga_cfg, sigma_dga)
     #new_mu = comm.bcast(new_mu, root=0)
+
+    # append tail of dmft to dga SE and dga GF
+    s_nuk_loc[ntail-n4iwf:ntail+n4iwf,:] = sigma_dga
+    G_nu_k = bse.G_nu_k(dga_cfg, new_mu, s_nuk_loc)
+
+    if do_eliashberg:
+        if rank == 0:
+            print("Calculating pairing vertex ...")
+            t1 = perf_counter()
+
+        # compute pairing vertex in singlet channel for all q
+        gamma_s_q = eliash.get_pairing_vertex(dga_cfg, gamma_d, gamma_m, v_d_w_q, v_m_w_q, chi_d_w_q, chi_m_w_q, chi0_w_q)
+        nup = gamma_s_q.shape[0]
+        # lambda corrections
+        gamma_s_full = np.zeros([nup, nup, n_qpoints], dtype=np.complex128)
+        gamma_s_full[...,q_range] = gamma_s_q
+
+        gamma_s = np.zeros_like(gamma_s_full) if rank==0 else None
+
+        comm.Reduce(gamma_s_full, gamma_s, op=MPI.SUM, root=0)
+
+        if rank == 0:
+            print(f"Time for pairing vertex: {perf_counter() - t1}")
+
+        if rank==0:
+            print(f"Computing largest {pairing_mode}-wave eigenvalue ... ")
+
+            t1 = perf_counter()
+            gamma = util.irr2fullBZ_nu(dga_cfg, gamma_s)
+            if rank == 0:
+                print(f"Time for gathering gamma on full BZ: {perf_counter() - t1}")
+
+            t1 = perf_counter()
+            lams = []
+            gaps = []
+            if pairing_mode=='s':
+                lam_s, gap_s = eliash.power_iteration(dga_cfg, gamma, G_nu_k, 's')
+                lams.append(lam_s)
+                gaps.append(gap_s)
+            elif pairing_mode=='d':
+                lam_d, gap_d = eliash.power_iteration(dga_cfg, gamma, G_nu_k, 'd')
+                lams.append(lam_d)
+                gaps.append(gap_d)
+            else:
+                lam_s, gap_s = eliash.power_iteration(dga_cfg, gamma, G_nu_k, 's')
+                lam_d, gap_d = eliash.power_iteration(dga_cfg, gamma, G_nu_k, 'd')
+                lams.append(lam_s)
+                lams.append(lam_d)
+                gaps.append(gap_s)
+                gaps.append(gap_d)
+            if rank == 0:
+                print(f"Time for power iteration solver: {perf_counter() - t1}")
+
+    comm.Barrier()
+
+    if rank == 0:
+        print("Time of iteration 0 :", perf_counter() - t0, "seconds")
 
     if(rank==0):
         print("Saving data of lambda-corrected DGA ...")
@@ -285,6 +352,8 @@ def main():
         group.create_dataset('lambda_m',data=lambda_m)
         group.create_dataset('chi_d_latt',data=chi_d_latt)
         group.create_dataset('chi_m_latt',data=chi_m_latt)
+        group.create_dataset('lam_sd',data=lams)
+        group.create_dataset('gap_sd',data=gaps)
         group.create_dataset('mu',data=new_mu)
         fsave.flush()
 

@@ -45,6 +45,8 @@ dga_config_spec = [
     ('occ_imp', nb.float64),
     ('asymp', nb.types.string),
     ('nouter', nb.int64),
+    ('do_eliashberg', nb.boolean),
+    ('pairing_mode', nb.types.string),
     # --- Handling np.ndarray ---
     # For a NumPy array, you need to specify:
     # 1. Element type (e.g., nb.complex128 for complex numbers, nb.float64 for floats)
@@ -71,6 +73,8 @@ dga_config_spec = [
     ('gamma_m', nb.complex128[:,:,:]),
     ('chi_d_loc', nb.complex128[:]),
     ('chi_m_loc', nb.complex128[:]),
+    ('chi_pp', nb.optional(nb.complex128[:,:])),
+    ('gamma_pp', nb.optional(nb.complex128[:,:])),
     ('ts', nb.float64[:]),
 ]
 
@@ -87,11 +91,11 @@ class DGA_Config:
                 # Make these mandatory by removing default = None
                 g_imp: np.ndarray,
                 s_imp: np.ndarray,
-                chi_loc_w: np.ndarray,
-                p3ph: np.ndarray,
                 chi_ph: np.ndarray,
                 ts: np.ndarray,
                 # Other parameters (can still have defaults)
+                chi_loc_w: np.ndarray=None,
+                p3ph: np.ndarray=None,
                 file_name: str = "results",
                 kdim: int = 2, nk: int = 4, nq: int = 4, irrbz: bool = True,
                 niwf: int = 1000, n2iwb: int = 100, 
@@ -101,6 +105,7 @@ class DGA_Config:
                 max_iter: int = 1, eps_se: float = 1e-3, mix_dmft: bool = False,
                 mixing_type: str = "linear", mixing: float = 0.5, beta_diis: float = 1.0, reg: float = 1e-8, mixing_window: int = 2,
                 lambda_decay: int = 1, lambda_type: str = "Pauli",
+                do_eliashberg: bool = False, pairing_mode: str = 'sd', 
                 use_mpi: bool = True,
                 beta: float = 1000.0, g0: float = 0.0, w0: float = 1.0, U: float = 0.0,
                 mu_imp: float = 0.0, occ_imp: float = 0.0):
@@ -135,6 +140,9 @@ class DGA_Config:
         self.lambda_decay = lambda_decay
         self.lambda_type = lambda_type
         self.use_mpi = use_mpi
+        # eliashberg params
+        self.do_eliashberg = do_eliashberg
+        self.pairing_mode = pairing_mode
         # Physical parameters
         self.beta = beta
         self.g0 = g0

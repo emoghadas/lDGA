@@ -51,6 +51,13 @@ def read_dmft_config(toml_dgafile_path:str) -> DGA_Config:
     nq = get_config_value(toml_config, "lattice.nq", default=4)
     kdim = get_config_value(toml_config, "lattice.kdim", default=2)
 
+    # eliashberg params
+    do_eliashberg = get_config_value(toml_config, "eliashberg.do_eliashberg", default=False)
+    pairing_mode = get_config_value(toml_config, "eliashberg.pairing_mode", default='sd')
+    pairing_modes = ['s', 'd', 'sd']
+    if pairing_mode not in pairing_modes:
+        raise ValueError("Wrong symmetry for eliashberg specified, options are s- and d-wave or both ('sd')")
+
     # Initialize variables that will be passed to DGA_Config
     # Set sensible defaults or ensure they will be overwritten by HDF5 data
     beta = 0.0
@@ -135,12 +142,17 @@ def read_dmft_config(toml_dgafile_path:str) -> DGA_Config:
                         g4iw_uu = 0.5*(g4iw[0,0,0,0,...] + g4iw[0,1,0,1,...])
                         g4iw_ud = 0.5*(g4iw[0,0,0,1,...] + g4iw[0,1,0,0,...])
                     
+                    g4iw_uu = 0.5*( np.transpose(g4iw_uu, (1,0,2)) + g4iw_uu)
+                    g4iw_ud = 0.5*( np.transpose(g4iw_ud, (1,0,2)) + g4iw_ud)
+
                     g4iw_sym_shape = (2,) + g4iw_uu.shape
                     g4iw_sym = np.empty(g4iw_sym_shape, dtype=np.complex128)
                     g4iw_sym[0,...] = g4iw_uu
                     g4iw_sym[1,...] = g4iw_ud
 
                     chi_ph = beta*g4iw_conn(g4iw_sym, giw)
+                    if worm:
+                        chi_ph = np.flip(chi_ph, axis=(-1)) # this makes the worm data consistent with Georg's convention
                     chi_ph_data = chi_ph.astype(np.complex128)
 
                 case default:
@@ -228,7 +240,9 @@ def read_dmft_config(toml_dgafile_path:str) -> DGA_Config:
         lambda_type = lambda_type,
         lambda_decay = lambda_decay,
         asymp = asymp,
-        nouter = nouter
+        nouter = nouter,
+        do_eliashberg = do_eliashberg,
+        pairing_mode = pairing_mode
     )
 
 

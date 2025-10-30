@@ -107,6 +107,22 @@ def irr2fullBZ(nq:np.int64, qpoints:np.ndarray, f_q:np.ndarray, dim:np.int64) ->
     return f_q_full
 
 @jit(nopython=True)
+def irr2fullBZ_nu(dga_cfg:DGA_ConfigType, arr:np.ndarray) -> np.ndarray:
+    nq = dga_cfg.nq
+    kdim = dga_cfg.kdim
+
+    nq_full = 2 * nq - 2
+    qps = (np.pi) * np.arange(nq) / (nq - 1)
+    qpoints, weights = irr_q_grid_2d(qps)
+    nu = arr.shape[0]//2
+    arr_new = np.empty((2*nu,2*nu,nq_full**kdim), dtype=np.complex128)
+    for i in range(2*nu):
+        for j in range(2*nu):
+            arr_new[i,j,:] = irr2fullBZ(nq, qpoints, arr[i,j], kdim)
+    return arr_new
+
+
+@jit(nopython=True)
 def ek(k:np.ndarray, t:np.float64=1.0, tpr:np.float64=0., tsec:np.float64=0.) -> np.float64:
     '''
     return sqaured/cubic lattice Hamiltonian evaluated at give k-point

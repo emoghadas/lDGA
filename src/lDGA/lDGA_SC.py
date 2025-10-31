@@ -270,14 +270,17 @@ def main():
 
     del sigma_dga_q
 
+    # append tail of dmft to dga SE and dga GF
+    s_nuk_loc[ntail-n4iwf:ntail+n4iwf,:] = sigma_dga
+    
     #Computing new mu
     new_mu=0.0
     if(rank==0):
-        new_mu = util.get_mu(dga_cfg, sigma_dga)
-    #new_mu = comm.bcast(new_mu, root=0)
+        s_mu = np.broadcast_to(s[:, None], (2*niwf, nk**kdim)).copy()
+        s_mu[niwf-n4iwf:niwf+n4iwf,:] = sigma_dga
+        new_mu = util.get_mu(dga_cfg, s_mu)
+        del s_mu
 
-    # append tail of dmft to dga SE and dga GF
-    s_nuk_loc[ntail-n4iwf:ntail+n4iwf,:] = sigma_dga
     G_nu_k = bse.G_nu_k(dga_cfg, new_mu, s_nuk_loc)
 
     if do_eliashberg:
@@ -352,8 +355,9 @@ def main():
         group.create_dataset('lambda_m',data=lambda_m)
         group.create_dataset('chi_d_latt',data=chi_d_latt)
         group.create_dataset('chi_m_latt',data=chi_m_latt)
-        group.create_dataset('lam_sd',data=lams)
-        group.create_dataset('gap_sd',data=gaps)
+        if do_eliashberg:
+            group.create_dataset('lam_sd',data=lams)
+            group.create_dataset('gap_sd',data=gaps)
         group.create_dataset('mu',data=new_mu)
         fsave.flush()
 

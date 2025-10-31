@@ -188,6 +188,7 @@ def G_nu_k(dga_cfg : DGA_ConfigType , mu:np.float64, s_dga:np.ndarray=None) -> n
     ts=dga_cfg.ts
     t1=ts[0]
     t2=ts[1]
+    t3=ts[2]
     k_grid = dga_cfg.k_grid
     nk = k_grid.shape[0]
     ntail = s_dga.shape[0]//2
@@ -196,7 +197,7 @@ def G_nu_k(dga_cfg : DGA_ConfigType , mu:np.float64, s_dga:np.ndarray=None) -> n
     nu_array=build_nu_mats(ntail, beta)
     for inu,nu in enumerate(nu_array):
         for ik,k in enumerate(k_grid):
-            G_nuk[inu,ik] = 1.0/( 1j*nu - ek(k, t=t1,tpr=t2) + mu - s_dga[inu,ik] )
+            G_nuk[inu,ik] = 1.0/( 1j*nu - ek(k,t=t1, tpr=t2, tsec=t3) + mu - s_dga[inu,ik] )
     return G_nuk
 
 
@@ -211,6 +212,7 @@ def chi0_w_q(dga_cfg : DGA_ConfigType , mu:np.float64, s_dga:np.ndarray=None) ->
     ts=dga_cfg.ts
     t1=ts[0]
     t2=ts[1]
+    t3=ts[2]
     k_grid = dga_cfg.k_grid
     dim = dga_cfg.kdim
     nk = k_grid.shape[0]
@@ -228,7 +230,7 @@ def chi0_w_q(dga_cfg : DGA_ConfigType , mu:np.float64, s_dga:np.ndarray=None) ->
             #    G_nu_k = 1.0/(1j*nu - ek(k,t=t1,tpr=t2) + mu - s_dmft[inu-n4iwf+niwf] )
             #else:
             #    G_nu_k = 1.0/(1j*nu - ek(k, t=t1,tpr=t2) + mu - s_dga[inu,ik] )
-            G_nu_k = 1.0/( 1j*nu - ek(k, t=t1,tpr=t2) + mu - s_dga[inu-n4iwf+ntail,ik] )
+            G_nu_k = 1.0/( 1j*nu - ek(k, t=t1, tpr=t2, tsec=t3) + mu - s_dga[inu-n4iwf+ntail,ik] )
             chi0_wq[inu,:,:] += G_nu_k*G_nuw_kq
     chi0_wq *= -beta/nk
     return chi0_wq

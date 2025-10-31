@@ -45,7 +45,7 @@ def read_dmft_config(toml_dgafile_path:str) -> DGA_Config:
     mixing_window = get_config_value(toml_config, "selfcons.mixing_window", default=2)
 
     # lattice params
-    ts = np.float64(get_config_value(toml_config, "lattice.ts", default=np.array([1.0,0.0])))
+    ts = np.float64(get_config_value(toml_config, "lattice.ts", default=np.array([1.0,0.0,0.0])))
     irrbz = get_config_value(toml_config, "lattice.irrbz", default=False)
     nk = get_config_value(toml_config, "lattice.nk", default=4)
     nq = get_config_value(toml_config, "lattice.nq", default=4)

@@ -239,10 +239,11 @@ def G_wq_given_nuk(nu:np.float64, k:np.ndarray, sigma:np.ndarray, n4iwf:int, n4i
     n4iwf = 0
     t1=ts[0]
     t2=ts[1]
+    t3=ts[2]
 
     for iq,q in enumerate(qpoints):
         kq = wrap_k(k+q)
-        eps_kq = np.complex128(ek(kq, t=t1,tpr=t2))
+        eps_kq = np.complex128(ek(kq, t=t1, tpr=t2, tsec=t3))
         i_qk = k2ik(kq,Nk_lin)
 
         for iw in range(-n4iwb,1+n4iwb):
@@ -412,11 +413,12 @@ def G_wq_given_nuk_irr(nu:np.float64, k:np.ndarray, sigma:np.ndarray, n4iwf:int,
     ntail = sigma_dga.shape[0] //2
     t1=ts[0]
     t2=ts[1]
+    t3=ts[2]
 
     for iq, all_qs in enumerate(all_q_sym):
         for iq_sym,q_sym in enumerate(all_qs):
             kq = wrap_k(k+q_sym)
-            eps_kq = np.complex128(ek(kq, t=t1,tpr=t2))            
+            eps_kq = np.complex128(ek(kq, t=t1, tpr=t2, tsec=t3))            
             i_qk = k2ik(kq,Nk_lin)
 
             for iw in range(-n4iwb,1+n4iwb):
@@ -461,11 +463,11 @@ def get_mu(dga_cfg:DGA_ConfigType, sigma_dga:np.ndarray) -> np.float64:
 
     eps_kgrid=np.zeros(k_grid.shape[0])
     if(ts is None):
-        t1=1.0; t2=0.0
+        t1=1.0; t2=0.0; t3=0.0
     else:
-        t1=ts[0]; t2=ts[1]
+        t1=ts[0]; t2=ts[1]; t3=ts[2]
     for ik,k in enumerate(k_grid):
-        eps_kgrid[ik] = ek(k, t=t1, tpr=t2)
+        eps_kgrid[ik] = ek(k, t=t1, tpr=t2, tsec=t3)
     root_sol = root(mu_root,args=(n_target,sigma_dga,eps_kgrid,beta),x0=mu_start,method="lm",tol=1e-10)
     mu_sol = root_sol.x[0]
     if(root_sol.success):

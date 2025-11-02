@@ -1,6 +1,6 @@
 import numpy as np
 from numba import jit
-from scipy.sparse.linalg import LinearOperator, gmres
+from scipy.sparse.linalg import LinearOperator, gmres, eigs
 from typing import Tuple
 from lDGA.config import DGA_ConfigType
 from lDGA.utilities import k2ik, build_nu_mats, build_w_mats, U_trans, Udyn, Udyn_arr, G_wq_given_nuk, ek
@@ -111,12 +111,12 @@ def get_pairing_vertex(dga_cfg:DGA_ConfigType, gamma_irr_d:np.ndarray, gamma_irr
                 gamma_nu2_d = gamma_d[nu2_idx,w_idx,q_idx]
                 gamma_nu1_m = gamma_m[nu1_idx,w_idx,q_idx]
                 gamma_nu2_m = gamma_m[nu2_idx,w_idx,q_idx]
-                f_pp = (F_d_loc - F_m_loc)[nu1_idx,nu2_idx,w_idx]
+                #f_pp = (F_d_loc - F_m_loc)[nu1_idx,nu2_idx,w_idx]
 
                 f_d = 1.0*(inu1==inu2)*beta/chi0_nu1 - phi_slice_d/(chi0_nu1*chi0_nu2) + u_d[w_idx] * (1-u_d[w_idx]*(chi_d[w_idx,q_idx])) * gamma_nu1_d * gamma_nu2_d
                 f_m = 1.0*(inu1==inu2)*beta/chi0_nu1 - phi_slice_m/(chi0_nu1*chi0_nu2) + u_m * (1-u_m*(chi_m[w_idx,q_idx])) * gamma_nu1_m * gamma_nu2_m
 
-                gamma_s[i,j,q_idx] = 0.5*f_d - 1.5*f_m - 2*f_pp - gamma_pp[i,j]
+                gamma_s[i,j,q_idx] = 0.5*f_d - 1.5*f_m #- 2*f_pp - gamma_pp[i,j]
                 #gamma_t[i,j,q_idx] = 0.5*f_d + 0.5*f_m
     
     return gamma_s
@@ -241,17 +241,18 @@ def power_iteration(dga_cfg, gamma, gk, mode:str,
 
     # helper: apply K (matrix-free), returns same shape as gap
     def apply_K(gap):
+        gap = unflat(gap)
         gap_gg  = np.fft.ifftn(gap * np.abs(g)**2, axes=(-1, -2))
         Kg_r    = (1.0 / (beta * nk**kdim)) * np.einsum('ijkl,jkl->ikl', gammax, gap_gg)
         Kg      = np.fft.fftn(Kg_r, axes=(-1, -2))
-        return Kg
+        return flat(Kg)
 
     # --- G-metric inner products (optional but recommended) ---
     def inner_G(x, y): return np.sum(np.conj(x) * (np.abs(g)**2) * y)
     def norm_G(x):     return np.sqrt(np.real(inner_G(x, x)) + 0.0)
 
     # starting vector (keep your channel-specific initializer)
-    v = get_gap_start(nup, nk, ktype=mode)          # shape: (2*nup, nk, nk)
+    v = get_gap_start(nup, nk, ktype='d')          # shape: (2*nup, nk, nk)
     v /= (norm_G(v) + 1e-30)
 
     # Flatten/unflatten for GMRES LinearOperator
@@ -266,9 +267,14 @@ def power_iteration(dga_cfg, gamma, gk, mode:str,
         y = x - apply_K(x)
         return flat(y)
 
-    Ik = LinearOperator((N, N), matvec=Ik_matvec, dtype=np.complex128)
+    Ik = LinearOperator((N, N), matvec=apply_K, dtype=np.complex128)
 
-    # iteration on M = (I - K)^(-1)
+    w, v = eigs(Ik, k=10, v0=flat(v))
+
+    return w, v    
+
+
+    '''# iteration on M = (I - K)^(-1)
     lam_old = None
     count   = 0
     while True:
@@ -305,4 +311,4 @@ def power_iteration(dga_cfg, gamma, gk, mode:str,
 
     # normalize output vector
     v /= (norm_G(v) + 1e-30)
-    return lam_new, v
+    return lam_new, v'''

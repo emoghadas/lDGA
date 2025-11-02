@@ -322,12 +322,13 @@ def main():
                 lams.append(lam_d)
                 gaps.append(gap_d)
             else:
-                lam_s, gap_s = eliash.power_iteration(dga_cfg, gamma, G_nu_k, 's')
-                lam_d, gap_d = eliash.power_iteration(dga_cfg, gamma, G_nu_k, 'd')
-                lams.append(lam_s)
-                lams.append(lam_d)
-                gaps.append(gap_s)
-                gaps.append(gap_d)
+                lams, gaps = eliash.power_iteration(dga_cfg, gamma, G_nu_k, 's')
+                #lam_s, gap_s = eliash.power_iteration(dga_cfg, gamma, G_nu_k, 's')
+                #lam_d, gap_d = eliash.power_iteration(dga_cfg, gamma, G_nu_k, 'd')
+                #lams.append(lam_s)
+                #lams.append(lam_d)
+                #gaps.append(gap_s)
+                #gaps.append(gap_d)
             if rank == 0:
                 print(f"Time for power iteration solver: {perf_counter() - t1}")
 

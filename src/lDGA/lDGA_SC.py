@@ -281,7 +281,11 @@ def main():
         new_mu = util.get_mu(dga_cfg, s_mu)
         del s_mu
 
-    G_nu_k = bse.G_nu_k(dga_cfg, new_mu, s_nuk_loc)
+    G_nu_k = bse.G_nu_k(dga_cfg, mu, s_nuk_loc)
+
+
+    #epc = eliash.get_epc(dga_cfg, gamma_d, gamma_m, v_d_w_q, v_m_w_q, chi_d_w_q, chi_m_w_q, chi0_w_q)
+
 
     if do_eliashberg:
         if rank == 0:
@@ -322,7 +326,7 @@ def main():
                 lams.append(lam_d)
                 gaps.append(gap_d)
             else:
-                lams, gaps = eliash.power_iteration(dga_cfg, gamma, G_nu_k, 's')
+                lams, gaps = eliash.get_eig(dga_cfg, gamma, G_nu_k)
                 #lam_s, gap_s = eliash.power_iteration(dga_cfg, gamma, G_nu_k, 's')
                 #lam_d, gap_d = eliash.power_iteration(dga_cfg, gamma, G_nu_k, 'd')
                 #lams.append(lam_s)
@@ -359,6 +363,8 @@ def main():
         if do_eliashberg:
             group.create_dataset('lam_sd',data=lams)
             group.create_dataset('gap_sd',data=gaps)
+            group.create_dataset('gamma',data=gamma)
+            group.create_dataset('giwk_dga',data=G_nu_k)
         group.create_dataset('mu',data=new_mu)
         fsave.flush()
 

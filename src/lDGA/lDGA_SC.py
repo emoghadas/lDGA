@@ -15,6 +15,7 @@ import lDGA.lambda_corr as lamb
 import lDGA.SDE as sde
 import lDGA.anderson_acc as aa
 import lDGA.eliashberg as eliash
+import lDGA.epc as epc
 from mpi4py import MPI
 import sys
 import scipy.optimize as scop
@@ -83,6 +84,8 @@ def main():
     lambda_decay = dga_cfg.lambda_decay
     file_name = dga_cfg.file_name
 
+    do_epc = dga_cfg.do_epc
+    nseg = dga_cfg.nseg
     do_eliashberg = dga_cfg.do_eliashberg
     pairing_mode = dga_cfg.pairing_mode
 
@@ -280,9 +283,38 @@ def main():
         new_mu = util.get_mu(dga_cfg, s_mu)
         del s_mu
 
-    G_nu_k = bse.G_nu_k(dga_cfg, mu, s_nuk_loc)
+    G_nu_k = bse.G_nu_k(dga_cfg, new_mu, s_nuk_loc)
 
-    #epc = eliash.get_epc(dga_cfg, gamma_d, gamma_m, v_d_w_q, v_m_w_q, chi_d_w_q, chi_m_w_q, chi0_w_q)
+    comm.Barrier()
+
+    if do_epc:
+        if rank==0:
+            print("Calculating renormalized EPC ...")
+            t1 = perf_counter()
+
+        F_w_q_d, F_w_q_m = epc.get_F_q(dga_cfg, gamma_d, gamma_m, v_d_w_q, v_m_w_q, chi_d_w_q, chi_m_w_q, chi0_w_q)
+        
+        F_w_q_d_full = np.zeros([2*n4iwf, 2*n4iwb+1, n_qpoints], dtype=np.complex128)
+        F_w_q_m_full = np.zeros([2*n4iwf, 2*n4iwb+1, n_qpoints], dtype=np.complex128)
+
+        F_w_q_d_full[...,q_range] = F_w_q_d
+        F_w_q_m_full[...,q_range] = F_w_q_m
+        
+        F_w_latt_d = np.zeros_like(F_w_q_d_full) if rank==0 else None
+        comm.Reduce(F_w_q_d_full, F_w_latt_d, op=MPI.SUM, root=0)
+        F_w_latt_m = np.zeros_like(F_w_q_d_full) if rank==0 else None
+        comm.Reduce(F_w_q_m_full, F_w_latt_m, op=MPI.SUM, root=0)
+
+        del F_w_q_d, F_w_q_d_full, F_w_q_m, F_w_q_m_full 
+
+        if rank==0:
+            F_w_q_d = util.irr2fullBZ_nu(dga_cfg, F_w_latt_d)
+            F_w_q_m = util.irr2fullBZ_nu(dga_cfg, F_w_latt_m)
+
+            epc_d_l, epc_d_t, epc_m_t, epc_loc = epc.get_epc(dga_cfg, F_w_q_d, F_w_q_m, G_nu_k, nseg)
+
+        if rank == 0:
+            print("Time for EPC:", perf_counter() - t1, "seconds")
 
 
     if do_eliashberg:
@@ -300,7 +332,7 @@ def main():
         comm.Reduce(gamma_s_full, gamma_s, op=MPI.SUM, root=0)
 
         if rank==0:
-            print(f"Computing largest {pairing_mode}-wave eigenvalue ... ")
+            print(f"Computing leading pairing eigenvalues ... ")
 
             gamma = util.irr2fullBZ_nu(dga_cfg, gamma_s)
 
@@ -336,6 +368,11 @@ def main():
         group.create_dataset('lambda_m',data=lambda_m)
         group.create_dataset('chi_d_latt',data=chi_d_latt)
         group.create_dataset('chi_m_latt',data=chi_m_latt)
+        if do_epc:
+            group.create_dataset('epc_d_l',data=epc_d_l)
+            group.create_dataset('epc_d_t',data=epc_d_t)
+            group.create_dataset('epc_m_t',data=epc_m_t)
+            group.create_dataset('epc_loc',data=epc_loc)
         if do_eliashberg:
             group.create_dataset('lam_sd',data=lams)
             group.create_dataset('gap_sd',data=gaps)

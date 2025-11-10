@@ -29,6 +29,8 @@
 [phonons]
 	g02 = 0.1
 	w0 = 1.0
+	do_epc = false
+	nseg = 10
 
 [eliashberg]
 	do_eliashberg = false

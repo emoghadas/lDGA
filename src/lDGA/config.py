@@ -40,6 +40,8 @@ dga_config_spec = [
     ('beta', nb.float64),
     ('g0', nb.float64),
     ('w0', nb.float64),
+    ('do_epc', nb.boolean),
+    ('nseg', nb.int64),
     ('U', nb.float64),
     ('mu_imp', nb.float64),
     ('occ_imp', nb.float64),
@@ -107,6 +109,7 @@ class DGA_Config:
                 lambda_decay: int = 1, lambda_type: str = "Pauli",
                 do_eliashberg: bool = False, pairing_mode: str = 'sd', 
                 use_mpi: bool = True,
+                do_epc: bool = False, nseg: int = 10,
                 beta: float = 1000.0, g0: float = 0.0, w0: float = 1.0, U: float = 0.0,
                 mu_imp: float = 0.0, occ_imp: float = 0.0):
 
@@ -141,6 +144,8 @@ class DGA_Config:
         self.lambda_type = lambda_type
         self.use_mpi = use_mpi
         # eliashberg params
+        self.do_epc = do_epc
+        self.nseg = nseg
         self.do_eliashberg = do_eliashberg
         self.pairing_mode = pairing_mode
         # Physical parameters

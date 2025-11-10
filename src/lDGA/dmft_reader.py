@@ -18,6 +18,8 @@ def read_dmft_config(toml_dgafile_path:str) -> DGA_Config:
     # phonons
     g02 = get_config_value(toml_config,"phonons.g02", default=0.1)
     w0 = get_config_value(toml_config,"phonons.w0", default=1.0)
+    do_epc = get_config_value(toml_config,"phonons.do_epc", default=False)
+    nseg = get_config_value(toml_config,"phonons.nseg", default=10)
 
     # general DGA params
     hdf5_dmftfile_path = get_config_value(toml_config, "dga.dmft_input", default="input.hdf5")
@@ -224,6 +226,8 @@ def read_dmft_config(toml_dgafile_path:str) -> DGA_Config:
         # Parameters from toml_config
         w0 = w0,
         g0 = g0,
+        do_epc = do_epc,
+        nseg = nseg,
         irrbz = irrbz,
         nk = nk,
         nq = nq,

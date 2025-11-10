@@ -114,10 +114,11 @@ def irr2fullBZ_nu(dga_cfg:DGA_ConfigType, arr:np.ndarray) -> np.ndarray:
     nq_full = 2 * nq - 2
     qps = (np.pi) * np.arange(nq) / (nq - 1)
     qpoints, weights = irr_q_grid_2d(qps)
-    nu = arr.shape[0]//2
-    arr_new = np.empty((2*nu,2*nu,nq_full**kdim), dtype=np.complex128)
-    for i in range(2*nu):
-        for j in range(2*nu):
+    nu1 = arr.shape[0]
+    nu2 = arr.shape[1]
+    arr_new = np.empty((nu1,nu2,nq_full**kdim), dtype=np.complex128)
+    for i in range(nu1):
+        for j in range(nu2):
             arr_new[i,j,:] = irr2fullBZ(nq, qpoints, arr[i,j], kdim)
     return arr_new
 

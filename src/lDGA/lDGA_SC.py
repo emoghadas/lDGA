@@ -107,7 +107,6 @@ def main():
         print("**************************************")
         sys.stdout.flush()
 
-    
     if rank==0:
         print("\n")
         print("Initializing momentum grids ...")
@@ -283,58 +282,35 @@ def main():
 
     G_nu_k = bse.G_nu_k(dga_cfg, mu, s_nuk_loc)
 
-
     #epc = eliash.get_epc(dga_cfg, gamma_d, gamma_m, v_d_w_q, v_m_w_q, chi_d_w_q, chi_m_w_q, chi0_w_q)
 
 
     if do_eliashberg:
         if rank == 0:
             print("Calculating pairing vertex ...")
-            t1 = perf_counter()
 
         # compute pairing vertex in singlet channel for all q
         gamma_s_q = eliash.get_pairing_vertex(dga_cfg, gamma_d, gamma_m, v_d_w_q, v_m_w_q, chi_d_w_q, chi_m_w_q, chi0_w_q)
-        nup = gamma_s_q.shape[0]
-        # lambda corrections
-        gamma_s_full = np.zeros([nup, nup, n_qpoints], dtype=np.complex128)
+        
+        nup = gamma_s_q.shape[0]//2
+        gamma_s_full = np.zeros([2*nup, 2*nup, n_qpoints], dtype=np.complex128)
         gamma_s_full[...,q_range] = gamma_s_q
-
+        
         gamma_s = np.zeros_like(gamma_s_full) if rank==0 else None
-
         comm.Reduce(gamma_s_full, gamma_s, op=MPI.SUM, root=0)
-
-        if rank == 0:
-            print(f"Time for pairing vertex: {perf_counter() - t1}")
 
         if rank==0:
             print(f"Computing largest {pairing_mode}-wave eigenvalue ... ")
 
-            t1 = perf_counter()
             gamma = util.irr2fullBZ_nu(dga_cfg, gamma_s)
-            if rank == 0:
-                print(f"Time for gathering gamma on full BZ: {perf_counter() - t1}")
 
-            t1 = perf_counter()
-            lams = []
-            gaps = []
-            if pairing_mode=='s':
-                lam_s, gap_s = eliash.power_iteration(dga_cfg, gamma, G_nu_k, 's')
-                lams.append(lam_s)
-                gaps.append(gap_s)
-            elif pairing_mode=='d':
-                lam_d, gap_d = eliash.power_iteration(dga_cfg, gamma, G_nu_k, 'd')
-                lams.append(lam_d)
-                gaps.append(gap_d)
-            else:
-                lams, gaps = eliash.get_eig(dga_cfg, gamma, G_nu_k)
-                #lam_s, gap_s = eliash.power_iteration(dga_cfg, gamma, G_nu_k, 's')
-                #lam_d, gap_d = eliash.power_iteration(dga_cfg, gamma, G_nu_k, 'd')
-                #lams.append(lam_s)
-                #lams.append(lam_d)
-                #gaps.append(gap_s)
-                #gaps.append(gap_d)
+            #g_nuk = np.broadcast_to(g[:, None], (2*niwf, nk**kdim)).copy()
+            #g_nuk[niwf-ntail:niwf+ntail,:] = G_nu_k
+            #gamma_full = np.ones((2*nouter, 2*nouter, nk**kdim), dtype=np.complex128)*2*u
+            #gamma_full[nouter-nup:nouter+nup, nouter-nup:nouter+nup, :] = gamma
+            lams, gaps = eliash.get_eig(dga_cfg, gamma, G_nu_k)
             if rank == 0:
-                print(f"Time for power iteration solver: {perf_counter() - t1}")
+                print(f"Eliashberg done!")
 
     comm.Barrier()
 
@@ -363,8 +339,6 @@ def main():
         if do_eliashberg:
             group.create_dataset('lam_sd',data=lams)
             group.create_dataset('gap_sd',data=gaps)
-            group.create_dataset('gamma',data=gamma)
-            group.create_dataset('giwk_dga',data=G_nu_k)
         group.create_dataset('mu',data=new_mu)
         fsave.flush()
 

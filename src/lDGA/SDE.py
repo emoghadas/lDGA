@@ -272,10 +272,13 @@ def Hubbard_Holstein_SDE_loc(u:np.float64, g0:np.float64, omega0:np.float64, bet
         theta_nu_w += -2*np.einsum('j,ij->ij',uw,gamma_d) + u*(gamma_d + 3*gamma_m) + (A_d + 3*A_m)/beta # here electronic and phononic contributions in A_r are separated
 
     theta_nu_w +=  np.einsum('ij,j,mj,mj->ij', gamma_d, 2*uw*u_d*(1-u_d*chi_d_w), gamma_d, chi0_nu_w)/beta**2 # 34.2
+    theta_nu_w +=  asymp_chi(2*n4iwf, beta) * np.einsum('ij,j,j->ij',gamma_d, 2*uw, u_d*(1-u_d*chi_d_w))/beta**2 # asymptotic contribution
 
     theta_nu_w -=  np.einsum('ij,j,im,mj,mj->ij', gamma_d, u_d*(1-u_d*chi_d_w), ununup, gamma_d, chi0_nu_w)/beta**2 # 34.3
+    theta_nu_w -=  u*asymp_chi(2*n4iwf, beta)*np.einsum('ij,j->ij',gamma_d,u_d*(1-u_d*chi_d_w))/beta**2 # asymptotic contribution
 
     theta_nu_w -= 3*np.einsum('ij,j,im,mj,mj->ij', gamma_m, u_m*(1-u_m*chi_m_w), ununup, gamma_m, chi0_nu_w)/beta**2 # 34.4
+    theta_nu_w -= u*asymp_chi(2*n4iwf, beta)*3*np.einsum('ij,j->ij',gamma_m,u_m*(1-u_m*chi_m_w))/beta**2 # asymptotic contribution
 
     theta_nu_w -= 2*np.einsum('j,ikj,kj->ij', uw, F_d_loc, chi0_nu_w)/beta**2 #local part
 

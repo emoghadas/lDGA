@@ -313,6 +313,8 @@ def main():
 
             epc_d_l, epc_d_t, epc_m_t, epc_loc = epc.get_epc(dga_cfg, F_w_q_d, F_w_q_m, G_nu_k, nseg)
 
+            del F_w_q_d, F_w_q_m
+
         if rank == 0:
             print("Time for EPC:", perf_counter() - t1, "seconds")
 
@@ -341,8 +343,7 @@ def main():
             #gamma_full = np.ones((2*nouter, 2*nouter, nk**kdim), dtype=np.complex128)*2*u
             #gamma_full[nouter-nup:nouter+nup, nouter-nup:nouter+nup, :] = gamma
             lams, gaps = eliash.get_eig(dga_cfg, gamma, G_nu_k)
-            if rank == 0:
-                print(f"Eliashberg done!")
+            print(f"Eliashberg done!")
 
     comm.Barrier()
 

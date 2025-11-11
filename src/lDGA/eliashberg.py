@@ -113,7 +113,7 @@ def get_pairing_vertex(dga_cfg:DGA_ConfigType, gamma_irr_d:np.ndarray, gamma_irr
                 gamma_nu2_d = gamma_d[nu2_idx,w_idx,q_idx]
                 gamma_nu1_m = gamma_m[nu1_idx,w_idx,q_idx]
                 gamma_nu2_m = gamma_m[nu2_idx,w_idx,q_idx]
-                #f_pp = (F_d_loc - F_m_loc)[nu1_idx,nu2_idx,w_idx]. # local double counting, only relevant for s-wave
+                #f_pp = 0.5*(F_d_loc - F_m_loc)[nu1_idx,nu2_idx,w_idx] # local double counting, only relevant for s-wave
 
                 f_d = 1.0*(inu1==inu2)*beta/chi0_nu1 - phi_slice_d/(chi0_nu1*chi0_nu2) + u_d[w_idx] * (1-u_d[w_idx]*(chi_d[w_idx,q_idx])) * gamma_nu1_d * gamma_nu2_d
                 f_m = 1.0*(inu1==inu2)*beta/chi0_nu1 - phi_slice_m/(chi0_nu1*chi0_nu2) + u_m * (1-u_m*(chi_m[w_idx,q_idx])) * gamma_nu1_m * gamma_nu2_m

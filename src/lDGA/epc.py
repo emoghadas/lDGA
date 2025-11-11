@@ -29,76 +29,13 @@ def get_F_q(dga_cfg:DGA_ConfigType, gamma_irr_d:np.ndarray, gamma_irr_m:np.ndarr
             phi_d = np.linalg.inv(np.diag(1/chi0_w_q[:,w_idx,q_idx]) + (gamma_irr_d[:,:,w_idx]-u_d[w_idx]*np.ones((2*n4iwf,2*n4iwf), dtype=np.complex128))/beta**2)
             phi_m = np.linalg.inv(np.diag(1/chi0_w_q[:,w_idx,q_idx]) + (gamma_irr_m[:,:,w_idx]-u_m*np.ones((2*n4iwf,2*n4iwf), dtype=np.complex128))/beta**2)
 
-            f_d = np.diag(beta*2/chi0_w_q[:,w_idx,q_idx]) - np.diag(beta/chi0_w_q[:,w_idx,q_idx])@phi_d@np.diag(beta/chi0_w_q[:,w_idx,q_idx]) + u_d[w_idx] * (1-u_d[w_idx]*chi_d[w_idx,q_idx])*np.outer(gamma_d[:,w_idx,q_idx], gamma_d[:,w_idx,q_idx])
-            f_m = np.diag(beta*2/chi0_w_q[:,w_idx,q_idx]) - np.diag(beta/chi0_w_q[:,w_idx,q_idx])@phi_m@np.diag(beta/chi0_w_q[:,w_idx,q_idx]) + u_m * (1-u_m*chi_m[w_idx,q_idx])*np.outer(gamma_m[:,w_idx,q_idx], gamma_m[:,w_idx,q_idx])
+            f_d = np.diag(beta**2/chi0_w_q[:,w_idx,q_idx]) - np.diag(beta/chi0_w_q[:,w_idx,q_idx])@phi_d@np.diag(beta/chi0_w_q[:,w_idx,q_idx]) + u_d[w_idx] * (1-u_d[w_idx]*chi_d[w_idx,q_idx])*np.outer(gamma_d[:,w_idx,q_idx], gamma_d[:,w_idx,q_idx])
+            f_m = np.diag(beta**2/chi0_w_q[:,w_idx,q_idx]) - np.diag(beta/chi0_w_q[:,w_idx,q_idx])@phi_m@np.diag(beta/chi0_w_q[:,w_idx,q_idx]) + u_m * (1-u_m*chi_m[w_idx,q_idx])*np.outer(gamma_m[:,w_idx,q_idx], gamma_m[:,w_idx,q_idx])
 
             F_w_q_d[:,w_idx,q_idx] = f_d[n4iwf,:]
             F_w_q_m[:,w_idx,q_idx] = f_m[n4iwf,:]
     
     return F_w_q_d, F_w_q_m
-
-
-"""@jit(nopython=True)
-def get_epc(dga_cfg:DGA_ConfigType, F_w_q_d:np.ndarray, F_w_q_m:np.ndarray, gk:np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    '''
-    Compute EPC with ladder density and magnetic F
-    '''
-    u=dga_cfg.U; beta=dga_cfg.beta; dens=dga_cfg.occ_imp
-    g0=dga_cfg.g0; omega0=dga_cfg.w0
-    k_grid = dga_cfg.k_grid
-    dim = dga_cfg.kdim
-    Nk = dga_cfg.n_kpoints
-    Nk_lin = int(np.round(Nk**(1/dim)))
-
-    n4iwf=dga_cfg.n4iwf; n4iwb=dga_cfg.n4iwb
-    F_d_loc = dga_cfg.F_d_loc
-    dim = dga_cfg.kdim
-    qpoints = dga_cfg.q_grid_loc
-
-    g = gk[gk.shape[0]//2-n4iwf:gk.shape[0]//2+n4iwf,:]
-
-    wmats  = build_w_mats(n4iwb,beta)
-
-    Uw = Udyn_arr(wmats,omega0,g0,u).astype(np.complex128)
-
-    u_d = 2*Uw - u
-    u_m = - u
-
-    kpath1 = np.array([[0,ki] for ki in  np.linspace(0,np.pi,10)])
-    kpath2 = np.array([[ki,np.pi] for ki in  np.linspace(0,np.pi,10)[1:]])
-    kpath3 = np.array([[ki,ki] for ki in  np.linspace(0,np.pi,10)[::-1][1:-1]])
-    kpath = np.append(kpath1, kpath2, axis=0)
-    kpath = np.append(kpath, kpath3, axis=0)
-
-    epc_d_l = np.empty((kpath.shape[0],kpath.shape[0]), dtype=np.complex128)
-    epc_d_t = np.empty((kpath.shape[0],kpath.shape[0]), dtype=np.complex128)
-    epc_m_t = np.empty((kpath.shape[0],kpath.shape[0]), dtype=np.complex128)
-    epc_loc = np.empty((kpath.shape[0],kpath.shape[0]), dtype=np.complex128)
-    nu_range = slice(n4iwf-n4iwb, n4iwf+n4iwb)
-    for i,k in enumerate(kpath):
-        for j,q in enumerate(kpath):
-            iq = k2ik(q, Nk_lin)
-            f_q_d = 0
-            f_kpmk_d = 0
-            f_kpmk_m = 0
-            f_loc = 0
-            for kp in k_grid:
-                ikp = k2ik(kp, Nk_lin)
-                ikpmk = k2ik(wrap_k(kp-k), Nk_lin)
-                ikpq = k2ik(wrap_k(kp+q), Nk_lin)
-
-                f_q_d += 1 - 1/beta * np.sum(F_w_q_d[:,n4iwb,iq] * g[:,ikp] * g[:,ikpq])
-                f_kpmk_d += 1 + 1/(2*beta) * np.sum(F_w_q_d[n4iwf,:-1,ikpmk] * g[nu_range,ikp] * g[nu_range,ikpq])
-                f_kpmk_m += 1 + 3/(2*beta) * np.sum(F_w_q_m[n4iwf,:-1,ikpmk] * g[nu_range,ikp] * g[nu_range,ikpq])
-
-                f_loc += 1 - 1/beta * np.sum(F_d_loc[n4iwf,:,n4iwb] * g[:,ikp] * g[:,ikpq])
-
-            epc_d_l[i,j] = f_q_d/Nk
-            epc_d_t[i,j] = f_kpmk_d/Nk
-            epc_m_t[i,j] = f_kpmk_m/Nk
-            epc_loc[i,j] = f_loc/Nk
-    
-    return epc_d_l, epc_d_t, epc_m_t, epc_loc"""
 
 
 @jit(nopython=True)

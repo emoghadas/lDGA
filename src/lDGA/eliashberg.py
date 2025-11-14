@@ -8,23 +8,30 @@ from lDGA.bse import asymp_chi
 
 
 @jit(nopython=True)
-def chi_pp_loc(dga_cfg : DGA_ConfigType) -> np.ndarray:
+def chi_pp_loc(dga_cfg : DGA_ConfigType) -> Tuple[np.ndarray,np.ndarray]:
     '''
     Compute local pp chi for iw=0
     '''
     beta = dga_cfg.beta; chi=dga_cfg.chi_ph
     n4iwf=dga_cfg.n4iwf; n4iwb=dga_cfg.n4iwb
     chi0_w = dga_cfg.chi0_w
+    F_d_loc = dga_cfg.F_d_loc
+    F_m_loc = dga_cfg.F_m_loc
 
     chi_ud =  chi[1,...]
+    #F_ud = 0.5*(F_d_loc + F_m_loc)
 
     nup = n4iwf//2
     chi_pp = np.empty((2*nup, 2*nup), dtype=np.complex128)
+    F_d_pp_loc = np.empty((2*nup, 2*nup), dtype=np.complex128)
+    F_m_pp_loc = np.empty((2*nup, 2*nup), dtype=np.complex128)
     for i, nu1 in enumerate(range(-nup, nup)):
         for j, nu2 in enumerate(range(-nup, nup)):
             iw_idx =  -nu1 - nu2 - 1 + n4iwb  
             chi_pp[i, j] = chi_ud[n4iwf+nu1, n4iwf+nu2, iw_idx]
-    return chi_pp
+            F_d_pp_loc[i, j] = F_d_loc[n4iwf+nu1, n4iwf+nu2, iw_idx]
+            F_m_pp_loc[i, j] = F_m_loc[n4iwf+nu1, n4iwf+nu2, iw_idx]
+    return chi_pp, F_d_pp_loc, F_m_pp_loc
 
 
 def bse_pp(dga_cfg : DGA_ConfigType) -> np.ndarray:
@@ -49,7 +56,7 @@ def bse_pp(dga_cfg : DGA_ConfigType) -> np.ndarray:
 
 
 @jit(nopython=True)
-def get_pairing_vertex(dga_cfg:DGA_ConfigType, gamma_irr_d:np.ndarray, gamma_irr_m:np.ndarray, gamma_d:np.ndarray, gamma_m:np.ndarray, chi_d:np.ndarray, chi_m:np.ndarray, chi0_w_q:np.ndarray) -> np.ndarray:
+def get_pairing_vertex(dga_cfg:DGA_ConfigType, gamma_irr_d:np.ndarray, gamma_irr_m:np.ndarray, gamma_d:np.ndarray, gamma_m:np.ndarray, chi_d:np.ndarray, chi_m:np.ndarray, chi0_w_q:np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     '''
     Compute ladder pairing vertex for singlet and triplet channels
     '''
@@ -85,8 +92,10 @@ def get_pairing_vertex(dga_cfg:DGA_ConfigType, gamma_irr_d:np.ndarray, gamma_irr
     u_d = 2*Uw - u
     u_m = - u
 
-    gamma_s = np.empty((2*nup,2*nup,qpoints.shape[0]), dtype=np.complex128)
-    gamma_t = np.empty((2*nup,2*nup,qpoints.shape[0]), dtype=np.complex128)
+    #gamma_s = np.empty((2*nup,2*nup,qpoints.shape[0]), dtype=np.complex128)
+    #gamma_t = np.empty((2*nup,2*nup,qpoints.shape[0]), dtype=np.complex128)
+    F_d = np.empty((2*nup,2*nup,qpoints.shape[0]), dtype=np.complex128)
+    F_m = np.empty((2*nup,2*nup,qpoints.shape[0]), dtype=np.complex128)
     for q_idx, q in enumerate(qpoints):
         for i,inu1 in enumerate(range(-nup, nup)):
             for j,inu2 in enumerate(range(-nup, nup)):
@@ -118,10 +127,12 @@ def get_pairing_vertex(dga_cfg:DGA_ConfigType, gamma_irr_d:np.ndarray, gamma_irr
                 f_d = 1.0*(inu1==inu2)*beta/chi0_nu1 - phi_slice_d/(chi0_nu1*chi0_nu2) + u_d[w_idx] * (1-u_d[w_idx]*(chi_d[w_idx,q_idx])) * gamma_nu1_d * gamma_nu2_d
                 f_m = 1.0*(inu1==inu2)*beta/chi0_nu1 - phi_slice_m/(chi0_nu1*chi0_nu2) + u_m * (1-u_m*(chi_m[w_idx,q_idx])) * gamma_nu1_m * gamma_nu2_m
 
-                gamma_s[i,j,q_idx] = 0.5*f_d - 1.5*f_m #- 2*f_pp - gamma_pp[i,j]
+                #gamma_s[i,j,q_idx] = 0.5*f_d - 1.5*f_m #- 2*f_pp - gamma_pp[i,j]
                 #gamma_t[i,j,q_idx] = 0.5*f_d + 0.5*f_m
+                F_d[i,j,q_idx] = f_d
+                F_m[i,j,q_idx] = f_m
     
-    return gamma_s
+    return F_d, F_m
 
 
 ############## power iteration routines ###############
@@ -215,7 +226,7 @@ def get_eig(dga_cfg, gamma, g):
 
     #v = get_gap_start(nup, nk, ktype='d').real 
     
-    lam, gap = eigsh(A, k=20, which='LA', ncv=100, tol=1e-10, maxiter=100000)
+    lam, gap = eigsh(A, k=5, which='LA', ncv=100, tol=1e-10, maxiter=100000)
     idx = np.abs(lam-1).argsort()   
     lam = lam[idx]
     gap = gap[:,idx]

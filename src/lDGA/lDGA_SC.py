@@ -188,7 +188,7 @@ def main():
     if do_eliashberg:
         if rank==0:
             print("Computing local pairing vertices ...")
-        chi_pp = eliash.chi_pp_loc(dga_cfg)
+        chi_pp, F_d_pp_loc, F_m_pp_loc = eliash.chi_pp_loc(dga_cfg)
         dga_cfg.chi_pp = chi_pp
         gamma_pp = eliash.bse_pp(dga_cfg)
         dga_cfg.gamma_pp = gamma_pp
@@ -313,7 +313,7 @@ def main():
 
             epc_d_l, epc_d_t, epc_m_t, epc_loc = epc.get_epc(dga_cfg, F_w_q_d, F_w_q_m, G_nu_k, nseg)
 
-            del F_w_q_d, F_w_q_m
+            #del F_w_q_d, F_w_q_m
 
         if rank == 0:
             print("Time for EPC:", perf_counter() - t1, "seconds")
@@ -324,19 +324,31 @@ def main():
             print("Calculating pairing vertex ...")
 
         # compute pairing vertex in singlet channel for all q
-        gamma_s_q = eliash.get_pairing_vertex(dga_cfg, gamma_d, gamma_m, v_d_w_q, v_m_w_q, chi_d_w_q, chi_m_w_q, chi0_w_q)
+        F_d_pp_q, F_m_pp_q = eliash.get_pairing_vertex(dga_cfg, gamma_d, gamma_m, v_d_w_q, v_m_w_q, chi_d_w_q, chi_m_w_q, chi0_w_q)
+        gamma_s_q = 0.5*F_d_pp_q - 1.5*F_m_pp_q
         
         nup = gamma_s_q.shape[0]//2
         gamma_s_full = np.zeros([2*nup, 2*nup, n_qpoints], dtype=np.complex128)
         gamma_s_full[...,q_range] = gamma_s_q
-        
         gamma_s = np.zeros_like(gamma_s_full) if rank==0 else None
         comm.Reduce(gamma_s_full, gamma_s, op=MPI.SUM, root=0)
+
+        F_d_pp_full = np.zeros([2*nup, 2*nup, n_qpoints], dtype=np.complex128)
+        F_d_pp_full[...,q_range] = F_d_pp_q
+        F_d_pp = np.zeros_like(F_d_pp_full) if rank==0 else None
+        comm.Reduce(F_d_pp_full, F_d_pp, op=MPI.SUM, root=0)
+
+        F_m_pp_full = np.zeros([2*nup, 2*nup, n_qpoints], dtype=np.complex128)
+        F_m_pp_full[...,q_range] = F_m_pp_q
+        F_m_pp = np.zeros_like(F_m_pp_full) if rank==0 else None
+        comm.Reduce(F_m_pp_full, F_m_pp, op=MPI.SUM, root=0)
 
         if rank==0:
             print(f"Computing leading pairing eigenvalues ... ")
 
             gamma = util.irr2fullBZ_nu(dga_cfg, gamma_s)
+            F_d_pp_fullbz = util.irr2fullBZ_nu(dga_cfg, F_d_pp)
+            F_m_pp_fullbz = util.irr2fullBZ_nu(dga_cfg, F_m_pp)
 
             #g_nuk = np.broadcast_to(g[:, None], (2*niwf, nk**kdim)).copy()
             #g_nuk[niwf-ntail:niwf+ntail,:] = G_nu_k
@@ -374,9 +386,19 @@ def main():
             group.create_dataset('epc_d_t',data=epc_d_t)
             group.create_dataset('epc_m_t',data=epc_m_t)
             group.create_dataset('epc_loc',data=epc_loc)
+            group.create_dataset('F_w_q_d',data=F_w_q_d)
+            group.create_dataset('F_w_q_m',data=F_w_q_m)
         if do_eliashberg:
             group.create_dataset('lam_sd',data=lams)
             group.create_dataset('gap_sd',data=gaps)
+            group.create_dataset('gamma_s',data=gamma)
+            group.create_dataset('F_d_pp',data=F_d_pp_fullbz)
+            group.create_dataset('F_m_pp',data=F_m_pp_fullbz)
+            group.create_dataset('F_d_pp_loc',data=F_d_pp_loc)
+            group.create_dataset('F_m_pp_loc',data=F_m_pp_loc)
+            group.create_dataset('gamma_pp_loc',data=gamma_pp)
+            group.create_dataset('G_nu_k',data=G_nu_k)
+
         group.create_dataset('mu',data=new_mu)
         fsave.flush()
 

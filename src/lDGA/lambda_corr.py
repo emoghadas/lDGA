@@ -61,7 +61,7 @@ def get_lambda_uniform(beta:np.float64, chi_r_latt:np.ndarray, chi_r_loc:np.ndar
     n4iwb = chi_r_latt.shape[0]//2
     lambda_maxpole = -np.min(1/chi_r_latt[n4iwb,:].real)
     print("Finding the uniform lambda_r")
-    root_sol = root(root_function_uniform,args=(beta,chi_r_latt,chi_r_loc,lambda_maxpole,weights),x0=np.log(0.2))
+    root_sol = root(root_function_uniform,args=(beta,chi_r_latt,chi_r_loc,lambda_maxpole,weights),x0=np.log(0.2),method="lm",tol=1e-8)
     lambda_sol = lambda_maxpole+np.exp(root_sol.x)
     if(root_sol.success): 
         print("After ",root_sol.nfev," iterations, the root is found to be ",lambda_sol)

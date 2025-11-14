@@ -103,10 +103,10 @@ def get_epc(dga_cfg, F_w_q_d, F_w_q_m, gk, nseg) -> Tuple[np.ndarray, np.ndarray
                 ikpmk = k2ik(wrap_k(kp - k), Nk_lin)    # both arrays now
                 ikpq  = k2ik(wrap_k(kp + q), Nk_lin)
 
-                f_q_d    -= (1.0/beta) * np.sum(F_w_q_d[:, n4iwb, iq]      * g[:, ikp]           * g[:, ikpq])
-                f_kpmk_d += (1.0/(2.0*beta)) * np.sum(F_w_q_d[n4iwf, :-1, ikpmk] * g[nu_start:nu_stop, ikp] * g[nu_start:nu_stop, ikpq])
-                f_kpmk_m += (3.0/(2.0*beta)) * np.sum(F_w_q_m[n4iwf, :-1, ikpmk] * g[nu_start:nu_stop, ikp] * g[nu_start:nu_stop, ikpq])
-                f_loc    += (1.0/beta) * np.sum(F_d_loc[n4iwf, :, n4iwb]   * g[:, ikp]           * g[:, ikpq])
+                f_q_d    += (1.0/beta) * np.sum(F_w_q_d[:, n4iwb, iq]      * g[:, ikp]           * g[:, ikpq])
+                f_kpmk_d -= (1.0/(2.0*beta)) * np.sum(F_w_q_d[n4iwf, :-1, ikpmk] * g[nu_start:nu_stop, ikp] * g[nu_start:nu_stop, ikpq])
+                f_kpmk_m -= (3.0/(2.0*beta)) * np.sum(F_w_q_m[n4iwf, :-1, ikpmk] * g[nu_start:nu_stop, ikp] * g[nu_start:nu_stop, ikpq])
+                f_loc    -= (1.0/beta) * np.sum(F_d_loc[n4iwf, :, n4iwb]   * g[:, ikp]           * g[:, ikpq])
 
             epc_d_l[i, j] = f_q_d / Nk
             epc_d_t[i, j] = f_kpmk_d / Nk

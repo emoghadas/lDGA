@@ -27,6 +27,7 @@ dga_config_spec = [
     ('n4iwf', nb.int64),
     ('n4iwb', nb.int64),
     ('max_iter', nb.int64),
+    ('do_sde', nb.boolean),
     ('eps_se', nb.float64),
     ('mix_dmft', nb.boolean),
     ('mixing_type', nb.types.string),
@@ -104,7 +105,7 @@ class DGA_Config:
                 n3iwf: int = 100, n3iwb: int = 100,
                 n4iwf: int = 100, n4iwb: int = 100,
                 asymp: str = "bubble", nouter: int = 300,
-                max_iter: int = 1, eps_se: float = 1e-3, mix_dmft: bool = False,
+                max_iter: int = 1, do_sde: bool = True, eps_se: float = 1e-3, mix_dmft: bool = False,
                 mixing_type: str = "linear", mixing: float = 0.5, beta_diis: float = 1.0, reg: float = 1e-8, mixing_window: int = 2,
                 lambda_decay: int = 1, lambda_type: str = "Pauli",
                 do_eliashberg: bool = False, pairing_mode: str = 'sd', 
@@ -133,6 +134,7 @@ class DGA_Config:
         self.nouter = nouter
         # Self-Consistency and Lambda correction parameters
         self.max_iter = max_iter
+        self.do_sde = do_sde
         self.eps_se = eps_se
         self.mix_dmft = mix_dmft
         self.mixing_type = mixing_type

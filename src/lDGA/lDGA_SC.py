@@ -73,6 +73,7 @@ def main():
 
     # get DGA configs
     max_iter = dga_cfg.max_iter
+    do_sde = dga_cfg.do_sde
     eps_se = dga_cfg.eps_se
     mix_dmft = dga_cfg.mix_dmft
     mixing_type = dga_cfg.mixing_type
@@ -256,34 +257,35 @@ def main():
     chi_d_w_q = chi_d_w_q / (1 + lambda_d*chi_d_w_q)
     chi_m_w_q = chi_m_w_q / (1 + lambda_m*chi_m_w_q)
 
-    if rank==0:
-        print("Calculate SDE for selfenergy")
-        sys.stdout.flush()
+    if do_sde:
+        if rank==0:
+            print("Calculate SDE for selfenergy")
+            sys.stdout.flush()
 
-    # sde for selfenergy
-    sigma_dga_q = sde.Hubbard_Holstein_SDE(dga_cfg, v_d_w_q, v_m_w_q, A_d,A_m, chi_d_w_q, chi_m_w_q, chi0_w_q, mu, G_nu_k, s_nuk_loc)
+        # sde for selfenergy
+        sigma_dga_q = sde.Hubbard_Holstein_SDE(dga_cfg, v_d_w_q, v_m_w_q, A_d,A_m, chi_d_w_q, chi_m_w_q, chi0_w_q, mu, G_nu_k, s_nuk_loc)
 
-    if(max_iter==1):
-        sigma_dga = np.zeros_like(sigma_dga_q,dtype=np.complex128) if rank==0 else None
-        comm.Reduce(sigma_dga_q, sigma_dga, op=MPI.SUM, root=0)
-    else:
-        sigma_dga = np.zeros_like(sigma_dga_q,dtype=np.complex128)
-        comm.Allreduce(sigma_dga_q,sigma_dga,op=MPI.SUM)
+        if(max_iter==1):
+            sigma_dga = np.zeros_like(sigma_dga_q,dtype=np.complex128) if rank==0 else None
+            comm.Reduce(sigma_dga_q, sigma_dga, op=MPI.SUM, root=0)
+        else:
+            sigma_dga = np.zeros_like(sigma_dga_q,dtype=np.complex128)
+            comm.Allreduce(sigma_dga_q,sigma_dga,op=MPI.SUM)
 
-    del sigma_dga_q
+        del sigma_dga_q
 
-    # append tail of dmft to dga SE and dga GF
-    s_nuk_loc[ntail-n4iwf:ntail+n4iwf,:] = sigma_dga
-    
-    #Computing new mu
-    new_mu=0.0
-    if(rank==0):
-        s_mu = np.broadcast_to(s[:, None], (2*niwf, nk**kdim)).copy()
-        s_mu[niwf-n4iwf:niwf+n4iwf,:] = sigma_dga
-        new_mu = util.get_mu(dga_cfg, s_mu)
-        del s_mu
+        # append tail of dmft to dga SE and dga GF
+        s_nuk_loc[ntail-n4iwf:ntail+n4iwf,:] = sigma_dga
+        
+        #Computing new mu
+        new_mu=0.0
+        if(rank==0):
+            s_mu = np.broadcast_to(s[:, None], (2*niwf, nk**kdim)).copy()
+            s_mu[niwf-n4iwf:niwf+n4iwf,:] = sigma_dga
+            new_mu = util.get_mu(dga_cfg, s_mu)
+            del s_mu
 
-    G_nu_k = bse.G_nu_k(dga_cfg, new_mu, s_nuk_loc)
+        G_nu_k = bse.G_nu_k(dga_cfg, new_mu, s_nuk_loc)
 
     comm.Barrier()
 
@@ -376,7 +378,9 @@ def main():
         group = fsave.create_group('iter_0')
         group.create_dataset('sigma_dmft',data=s)
         group.create_dataset('sigma_sde_loc',data=sigma_sde_loc)
-        group.create_dataset('sigma',data=sigma_dga)
+        if do_sde:
+            group.create_dataset('sigma',data=sigma_dga)
+            group.create_dataset('mu',data=new_mu)
         group.create_dataset('lambda_d',data=lambda_d)
         group.create_dataset('lambda_m',data=lambda_m)
         group.create_dataset('chi_d_latt',data=chi_d_latt)
@@ -398,8 +402,6 @@ def main():
             group.create_dataset('F_m_pp_loc',data=F_m_pp_loc)
             group.create_dataset('gamma_pp_loc',data=gamma_pp)
             group.create_dataset('G_nu_k',data=G_nu_k)
-
-        group.create_dataset('mu',data=new_mu)
         fsave.flush()
 
     if max_iter>1:    

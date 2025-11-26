@@ -35,7 +35,7 @@ def read_dmft_config(toml_dgafile_path:str) -> DGA_Config:
         raise ValueError("Asymptotics based on dual-BSE are currently not implemented for the W2DYNAMICS impurity-solver")
     nouter = get_config_value(toml_config, "dga.nouter", default=300)
     max_iter = get_config_value(toml_config, "dga.max_iter", default=1)
-    do_sde = get_config_value(toml_config, "dga.do_sde", default=False)
+    do_sde = get_config_value(toml_config, "dga.do_sde", default=True)
     if not do_sde and max_iter>1:
         raise ValueError("Cannot do SC-lDGA without SDE !")
 

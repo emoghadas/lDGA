@@ -16,6 +16,7 @@ dga_config_spec = [
     ('k_grid', nb.float64[:,:]),
     ('q_grid', nb.float64[:,:]),
     ('q_grid_loc', nb.float64[:,:]),
+    ('q_range', nb.types.slice2_type),
     ('weights', nb.complex128[:]),
     ('irrbz', nb.boolean),
     ('all_q_sym', nb.optional(nb.float64[:,:,:])),

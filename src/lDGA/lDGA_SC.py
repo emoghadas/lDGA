@@ -41,6 +41,7 @@ def distribute_qpoints(dga_cfg:DGA_ConfigType, size, rank) -> None:
     q_range = slice(int(start_idx), int(end_idx))
     q_grid_loc = dga_cfg.q_grid[q_range,:]
     dga_cfg.q_grid_loc = q_grid_loc
+    dga_cfg.q_range = q_range
     return q_range
     
 def main():
@@ -243,12 +244,21 @@ def main():
     lambda_m = np.zeros((n4iwb*2+1,1))
     lambda_d = np.zeros((n4iwb*2+1,1))
 
-    if rank==0:
-        print("Doing lambda Correction of type:", lambda_type)
-        sys.stdout.flush()
-        lambda_d0, lambda_m0 = lamb.lambda_correction(dga_cfg, chi_d_latt, chi_m_latt)
-        lambda_d[:,0] = lambda_d0
-        lambda_m[:,0] = lambda_m0
+    if lambda_type=="Epot":
+        if rank==0:
+            print("Doing lambda Correction of type:", lambda_type)
+        
+        lam_d, lam_m = lamb.lambda_correction_epot(dga_cfg, chi_d_latt, chi_m_latt, v_d_w_q, v_m_w_q, A_d,A_m, chi_d_w_q, chi_m_w_q, chi0_w_q, mu, G_nu_k, s_nuk_loc, comm)
+        if rank==0:
+            lambda_d[:,0] = lam_d
+            lambda_m[:,0] = lam_m
+    else:
+        if rank==0:
+            print("Doing lambda Correction of type:", lambda_type)
+            sys.stdout.flush()
+            lambda_d0, lambda_m0 = lamb.lambda_correction(dga_cfg, chi_d_latt, chi_m_latt)
+            lambda_d[:,0] = lambda_d0
+            lambda_m[:,0] = lambda_m0
 
     lambda_d = comm.bcast(lambda_d, root=0)
     lambda_m = comm.bcast(lambda_m, root=0)
@@ -380,6 +390,7 @@ def main():
         group.create_dataset('sigma_sde_loc',data=sigma_sde_loc)
         if do_sde:
             group.create_dataset('sigma',data=sigma_dga)
+            group.create_dataset('G_nu_k',data=G_nu_k)
             group.create_dataset('mu',data=new_mu)
         group.create_dataset('lambda_d',data=lambda_d)
         group.create_dataset('lambda_m',data=lambda_m)
@@ -401,7 +412,6 @@ def main():
             group.create_dataset('F_d_pp_loc',data=F_d_pp_loc)
             group.create_dataset('F_m_pp_loc',data=F_m_pp_loc)
             group.create_dataset('gamma_pp_loc',data=gamma_pp)
-            group.create_dataset('G_nu_k',data=G_nu_k)
         fsave.flush()
 
     if max_iter>1:    

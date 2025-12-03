@@ -454,8 +454,9 @@ def mu_root(mu:np.float64,n_target:np.float64, sigma_dga:np.ndarray, eps_kgrid:n
     return n_target - (1.0/Nk/beta)*np.sum(  1.0/( 1j*nu_array +mu - eps_kgrid.reshape(1,Nk) -sigma_dga  ) - 1.0/(1j*nu_array ) ).real -0.5
 
 
-def get_mu(dga_cfg:DGA_ConfigType, sigma_dga:np.ndarray) -> np.float64:
-    print("Searching for new chemical potential...")
+def get_mu(dga_cfg:DGA_ConfigType, sigma_dga:np.ndarray, verbose=True) -> np.float64:
+    if verbose:
+        print("Searching for new chemical potential...")
     mu_start = dga_cfg.mu_imp
     n_target = dga_cfg.occ_imp
     beta = dga_cfg.beta
@@ -471,8 +472,9 @@ def get_mu(dga_cfg:DGA_ConfigType, sigma_dga:np.ndarray) -> np.float64:
         eps_kgrid[ik] = ek(k, t=t1, tpr=t2, tsec=t3)
     root_sol = root(mu_root,args=(n_target,sigma_dga,eps_kgrid,beta),x0=mu_start,method="lm",tol=1e-10)
     mu_sol = root_sol.x[0]
-    if(root_sol.success):
-        print("After ",root_sol.nfev," function evaluations, the root is found to be ", mu_sol)
-    else:
-        print("Root finding did not converge. The best estimate is ", mu_sol)
+    if verbose:
+        if(root_sol.success):
+            print("After ",root_sol.nfev," function evaluations, the root is found to be ", mu_sol)
+        else:
+            print("Root finding did not converge. The best estimate is ", mu_sol)
     return mu_sol

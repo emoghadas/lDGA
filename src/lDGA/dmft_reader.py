@@ -135,6 +135,9 @@ def read_dmft_config(toml_dgafile_path:str) -> DGA_Config:
                         siw = f['stat-last/ineq-001/siw/value'][0,0,:] * 0.5
                         siw += f['stat-last/ineq-001/siw/value'][0,1,:] * 0.5
                     s_imp_data = siw.astype(np.complex128)
+                    s_imp_data.real = 0.5*(np.flip(s_imp_data.real) + s_imp_data.real)
+                    s_imp_data.imag = 0.5*(-np.flip(s_imp_data.imag) + s_imp_data.imag)
+                    s_imp_data = se_tailfit(s_imp_data, g02, w0, occ_imp, U, beta)
 
                     # Read 2p-GF
                     if worm:
@@ -311,3 +314,40 @@ def g3iw_conn(g3iw, giw, n, beta):
         g3iw[:,:,iw_idx] /= norm
 
     return g3iw
+
+def se_tailfit(sigma, g02, w0, n, u, beta):
+    niw = sigma.shape[0]//2
+    
+    mom0 = n*( u - (4*g02/w0) ) + g02/w0
+    
+    s_loc = sigma[niw:]
+    iv = (2*np.arange(niw)+1)*np.pi/beta
+    n_freq_fit = int(4*beta)
+    iwfit = 1j*iv[:n_freq_fit]
+    fitdata = s_loc[:n_freq_fit]
+    mom1 = (fitdata.imag * iwfit.imag)[-1]
+
+    niv_core = n_freq_fit
+
+    niv_shell = niw - niv_core
+    iv_asympt = 1j*(2*np.arange(niv_core, niw)+1)*np.pi/beta
+    asympt = (mom0 - 1 / iv_asympt * (mom1))
+    
+    sigma_asympt = np.empty((2*niw), dtype=complex)
+    sigma_asympt[niw:niw+niv_core] = s_loc[:niv_core]
+    sigma_asympt[niw+niv_core:] = asympt
+    sigma_asympt.real[:niw] = sigma_asympt.real[niw:][::-1]*1
+    sigma_asympt.imag[:niw] = sigma_asympt.imag[niw:][::-1]*(-1)
+
+    import matplotlib.pyplot as plt
+    nurange = slice(niw-300, niw+300)
+    plt.figure()
+    plt.plot(sigma.imag[nurange], ".-")
+    plt.plot(sigma_asympt.imag[nurange], "--")
+    plt.savefig("SE_tailfit_imag.pdf")
+    plt.figure()
+    plt.plot(sigma.real[nurange], ".-")
+    plt.plot(sigma_asympt.real[nurange], "--")
+    plt.savefig("SE_tailfit_real.pdf")
+
+    return sigma_asympt

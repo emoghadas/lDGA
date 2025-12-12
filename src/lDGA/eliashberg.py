@@ -50,7 +50,7 @@ def bse_pp(dga_cfg : DGA_ConfigType) -> np.ndarray:
     nu_range = slice(niwf-nup,niwf+nup)
     chi0_pp = -beta*g[nu_range]*np.flip(g[nu_range])
 
-    gamma_pp = beta**2 * np.linalg.inv(np.linalg.inv(chi_pp - np.diag(chi0_pp)) + np.diag(1/chi0_pp))
+    gamma_pp = beta**2 * (np.linalg.inv(np.flip(chi_pp, axis=1) - np.diag(chi0_pp)) + np.diag(1/chi0_pp))
 
     return np.flip(gamma_pp, axis=-1)
 

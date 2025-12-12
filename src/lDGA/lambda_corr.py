@@ -104,7 +104,10 @@ def lambda_correction_epot(dga_cfg, chi_d_latt, chi_m_latt, v_d_w_q, v_m_w_q, A_
 
         new_mu=0.0
         if(rank==0):
-            new_mu = util.get_mu(dga_cfg, s_nuk_dga, verbose=False)
+            s_mu = np.broadcast_to(s_imp[:, None], (2*niwf, Nq)).copy()
+            s_mu[niwf-n4iwf:niwf+n4iwf,:] = sigma_dga
+            new_mu = util.get_mu(dga_cfg, s_mu, verbose=False)
+            del s_mu
         new_mu = comm.bcast(new_mu, root=0)
 
         G_nu_k_dga = bse.G_nu_k(dga_cfg, new_mu, s_nuk_dga)
@@ -122,10 +125,11 @@ def lambda_correction_epot(dga_cfg, chi_d_latt, chi_m_latt, v_d_w_q, v_m_w_q, A_
         comm.Reduce(chi_m_q_full, chi_m_lam, op=MPI.SUM, root=0)
 
         if rank==0:
-            s_nuk_tail = np.broadcast_to(s_imp[niwf-1000:niwf+1000, None], (2000, Nq)).copy()
-            s_nuk_tail[1000-ntail:1000+ntail,:] = s_nuk_dga
-            g_nuk_tail = np.broadcast_to(g_imp[niwf-1000:niwf+1000, None], (2000, Nq)).copy()
-            g_nuk_tail[1000-ntail:1000+ntail,:] = G_nu_k_dga
+            nus = niwf
+            s_nuk_tail = np.broadcast_to(s_imp[niwf-nus:niwf+nus, None], (2*nus, Nq)).copy()
+            s_nuk_tail[nus-ntail:nus+ntail,:] = s_nuk_dga
+            g_nuk_tail = np.broadcast_to(g_imp[niwf-nus:niwf+nus, None], (2*nus, Nq)).copy()
+            g_nuk_tail[nus-ntail:nus+ntail,:] = G_nu_k_dga
 
             norm = beta*Nq
             epot1 = np.sum(g_nuk_tail*(s_nuk_tail-lam/2))/norm + ht*0.5
@@ -227,7 +231,10 @@ def root_epot(lam_d, lam_m_sol, dga_cfg, beta, chi_d_latt, chi_m_latt, chi_d_loc
 
     new_mu=0.0
     if(rank==0):
-        new_mu = util.get_mu(dga_cfg, s_nuk_dga, verbose=False)
+        s_mu = np.broadcast_to(s_imp[:, None], (2*niwf, Nq)).copy()
+        s_mu[niwf-n4iwf:niwf+n4iwf,:] = sigma_dga
+        new_mu = util.get_mu(dga_cfg, s_mu, verbose=False)
+        del s_mu
     new_mu = comm.bcast(new_mu, root=0)
     
     G_nu_k_dga = bse.G_nu_k(dga_cfg, new_mu, s_nuk_dga)
@@ -245,10 +252,11 @@ def root_epot(lam_d, lam_m_sol, dga_cfg, beta, chi_d_latt, chi_m_latt, chi_d_loc
     comm.Reduce(chi_m_q_full, chi_m_lam, op=MPI.SUM, root=0)
 
     if rank==0:
-        s_nuk_tail = np.broadcast_to(s_imp[niwf-1000:niwf+1000, None], (2000, Nq)).copy()
-        s_nuk_tail[1000-ntail:1000+ntail,:] = s_nuk_dga
-        g_nuk_tail = np.broadcast_to(g_imp[niwf-1000:niwf+1000, None], (2000, Nq)).copy()
-        g_nuk_tail[1000-ntail:1000+ntail,:] = G_nu_k_dga
+        nus = niwf
+        s_nuk_tail = np.broadcast_to(s_imp[niwf-nus:niwf+nus, None], (2*nus, Nq)).copy()
+        s_nuk_tail[nus-ntail:nus+ntail,:] = s_nuk_dga
+        g_nuk_tail = np.broadcast_to(g_imp[niwf-nus:niwf+nus, None], (2*nus, Nq)).copy()
+        g_nuk_tail[nus-ntail:nus+ntail,:] = G_nu_k_dga
 
         norm = beta*Nq
         epot1 = np.sum(g_nuk_tail*(s_nuk_tail-lam/2))/norm + ht*0.5

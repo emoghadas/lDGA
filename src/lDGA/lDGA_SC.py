@@ -366,6 +366,10 @@ def main():
             #g_nuk[niwf-ntail:niwf+ntail,:] = G_nu_k
             #gamma_full = np.ones((2*nouter, 2*nouter, nk**kdim), dtype=np.complex128)*2*u
             #gamma_full[nouter-nup:nouter+nup, nouter-nup:nouter+nup, :] = gamma
+            F_d_pp_loc_q = np.broadcast_to(F_d_pp_loc[:, :, None], (2*nup, 2*nup, n_qpoints_fullbz)).copy()
+            F_m_pp_loc_q = np.broadcast_to(F_m_pp_loc[:, :, None], (2*nup, 2*nup, n_qpoints_fullbz)).copy()
+            gamma_pp_loc_q = np.broadcast_to(gamma_pp[:, :, None], (2*nup, 2*nup, n_qpoints_fullbz)).copy()
+            gamma += -(F_d_pp_loc_q - F_m_pp_loc_q) + gamma_pp_loc_q # local double countings only for s-wave
             lams, gaps = eliash.get_eig(dga_cfg, gamma, G_nu_k)
             print(f"Eliashberg done!")
 

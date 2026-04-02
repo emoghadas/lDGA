@@ -209,8 +209,15 @@ def main():
     # G_nu_k for all ranks
     G_nu_k = bse.G_nu_k(dga_cfg, mu, s_nuk_loc)
 
-    # lattice bubble for each processes' q-points
+    # lattice bubble for each processes' q-points and then gather for all q
     chi0_w_q = bse.chi0_w_q(dga_cfg, mu, s_dga=s_nuk_loc)
+
+    chi0_q_full = np.zeros([2*n4iwf, 2*n4iwb+1, n_qpoints], dtype=np.complex128)
+    chi0_q_full[:,q_range] = chi0_w_q
+
+    chi0_latt = np.zeros_like(chi_d_q_full) if rank==0 else None
+
+    comm.Reduce(chi0_q_full, chi0_latt, op=MPI.SUM, root=0)
 
     if rank==0:
         print("Calculate lattice susceptibility and hedin vertex ...")
@@ -396,6 +403,8 @@ def main():
             group.create_dataset('sigma',data=sigma_dga)
             group.create_dataset('G_nu_k',data=G_nu_k)
             group.create_dataset('mu',data=new_mu)
+        group.create_dataset('chi0_loc',data=dga_cfg.chi0_w)
+        group.create_dataset('chi0_latt',data=chi0_latt)    
         group.create_dataset('lambda_d',data=lambda_d)
         group.create_dataset('lambda_m',data=lambda_m)
         group.create_dataset('chi_d_latt',data=chi_d_latt)

@@ -194,7 +194,7 @@ def read_dmft_config(toml_dgafile_path:str) -> DGA_Config:
                     if dmft_solver=='w2dyn_dual':
                         chi_ph = beta*g4iw_conn(g4iw, giw)    
                     else:
-                        chi_ph = g4iw_conn(g4iw, giw)
+                        chi_ph = g4iw_conn(g4iw, np.sqrt(beta)*giw)        
                     chi_ph_data = chi_ph.astype(np.complex128)
 
     except KeyError as e:
@@ -306,7 +306,7 @@ def g3iw_conn(g3iw, giw, n, beta):
     disc = beta*n*g[n1iwf-niwf:n1iwf+niwf]
     g3iw[:,:,niwb] -= disc
 
-    for iw in range(-niwb, niwb):
+    for iw in range(-niwb, niwb+1):
         gw0 = g[n1iwf-niwf:n1iwf+niwf]
         gw = g[n1iwf-niwf+iw:n1iwf+niwf+iw]
         norm = -beta * gw0 * gw

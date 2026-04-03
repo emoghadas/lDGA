@@ -162,12 +162,12 @@ def main():
     else:
         dga_cfg.chi0_w = bse.chi0_loc_w(dga_cfg)
 
-    if asymp=='bare-u':
-        if rank==0:
-            print("Computing irreducible vertex gamma_r from local BSE ...")
-        gamma_d, gamma_m = bse.gamma_w(dga_cfg)
-        dga_cfg.gamma_d = gamma_d
-        dga_cfg.gamma_m = gamma_m
+    #if asymp=='bare-u':
+    if rank==0:
+        print("Computing irreducible vertex gamma_r from local BSE ...")
+    gamma_d, gamma_m = bse.gamma_w(dga_cfg)
+    dga_cfg.gamma_d = gamma_d
+    dga_cfg.gamma_m = gamma_m
 
     F_d_loc, F_m_loc = bse.F_r_loc(dga_cfg)
     dga_cfg.F_d_loc = F_d_loc
@@ -213,9 +213,9 @@ def main():
     chi0_w_q = bse.chi0_w_q(dga_cfg, mu, s_dga=s_nuk_loc)
 
     chi0_q_full = np.zeros([2*n4iwf, 2*n4iwb+1, n_qpoints], dtype=np.complex128)
-    chi0_q_full[:,q_range] = chi0_w_q
+    chi0_q_full[:,:,q_range] = chi0_w_q
 
-    chi0_latt = np.zeros_like(chi_d_q_full) if rank==0 else None
+    chi0_latt = np.zeros_like(chi0_q_full) if rank==0 else None
 
     comm.Reduce(chi0_q_full, chi0_latt, op=MPI.SUM, root=0)
 

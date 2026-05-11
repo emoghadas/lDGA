@@ -1,3 +1,4 @@
+import math
 import numpy as np
 from scipy.optimize import root
 from numba import jit
@@ -156,6 +157,77 @@ def k_grid(nk:np.int64, kdim:np.int64) -> np.ndarray:
         k_grid = np.transpose(np.array(np.meshgrid(kpoints, kpoints, kpoints, indexing='ij')), (0,3,2,1))
         k_grid = k_grid.reshape(3,-1).T
     return k_grid
+
+# this must not be jit compiled
+def _nk_from_fullbz(n_qpoints_fullbz:int) -> int:
+    nk = math.isqrt(n_qpoints_fullbz)
+    if nk * nk != n_qpoints_fullbz:
+        raise ValueError("n_qpoints_fullbz must be a perfect square, nk**2.")
+    if nk % 2:
+        raise ValueError("nk must be even so that Gamma=(0,0) lies on the grid.")
+    return nk
+
+# this must not be jit compiled
+def _wrapped_grid_value(m:int, nk:int) -> float:
+    """Return m * dk wrapped to the grid interval [-pi, pi)."""
+    dk = 2.0 * np.pi / nk
+    return ((m + nk // 2) % nk - nk // 2) * dk
+
+# this must not be jit compiled
+def _qpoints_from_grid_multiples(path_multiples:list[tuple[int, int]], nk:int) -> Tuple[np.ndarray, np.ndarray]:
+    half = nk // 2
+    qpoints = np.array(
+        [[_wrapped_grid_value(mx, nk), _wrapped_grid_value(my, nk)]
+         for mx, my in path_multiples],
+        dtype=float,
+    )
+    indices = np.array(
+        [((mx + half) % nk) + nk * ((my + half) % nk)
+         for mx, my in path_multiples],
+        dtype=int,
+    )
+    return qpoints, indices
+
+# this must not be jit compiled
+def gamma_x_m_qpoints(n_qpoints_fullbz:int, nq_seg:int | None = None, include_final_gamma:bool = False) -> Tuple[np.ndarray, np.ndarray]:
+    """Return q-points and flattened grid indices along Gamma-X-M.
+
+    X=(pi,0) and M=(pi,pi) are represented by the equivalent grid points
+    (-pi,0) and (-pi,-pi), since +pi is not part of the [-pi, pi) grid.
+    The flattened indices match k_grid/k2ik ordering.
+
+    If nq_seg is given, the path is Gamma-X-M-Gamma with nq_seg samples per
+    segment. The samples are placed uniformly along the ideal path, rounded to
+    nearby points on the existing grid, and vertices are not duplicated between
+    neighboring segments. If nq_seg is larger than the number of available grid
+    intervals, repeated grid points are possible. Set include_final_gamma=True
+    to append the closing Gamma point.
+    """
+    nk = _nk_from_fullbz(n_qpoints_fullbz)
+    half = nk // 2
+
+    if nq_seg is None:
+        path_multiples = (
+            [(mx, 0) for mx in range(half + 1)]
+            + [(half, my) for my in range(1, half + 1)]
+        )
+        return _qpoints_from_grid_multiples(path_multiples, nk)
+
+    if nq_seg <= 0:
+        raise ValueError("nq_seg must be positive.")
+
+    samples = np.arange(nq_seg, dtype=float) / nq_seg
+    up = [min(int(np.floor(half * t + 0.5)), half - 1) for t in samples]
+    down = [max(int(np.floor(half * (1.0 - t) + 0.5)), 1) for t in samples]
+    path_multiples = (
+        [(mx, 0) for mx in up]
+        + [(half, my) for my in up]
+        + [(m, m) for m in down]
+    )
+    if include_final_gamma:
+        path_multiples.append((0, 0))
+
+    return _qpoints_from_grid_multiples(path_multiples, nk)
 
 # this must not be jit compiled
 def create_kgrid(dga_cfg:DGA_ConfigType) -> None:

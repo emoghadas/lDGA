@@ -89,6 +89,7 @@ def main():
     do_epc = dga_cfg.do_epc
     nseg = dga_cfg.nseg
     do_eliashberg = dga_cfg.do_eliashberg
+    do_eliashberg_ph = dga_cfg.do_eliashberg_ph
     pairing_mode = dga_cfg.pairing_mode
 
 
@@ -162,12 +163,12 @@ def main():
     else:
         dga_cfg.chi0_w = bse.chi0_loc_w(dga_cfg)
 
-    #if asymp=='bare-u':
-    if rank==0:
-        print("Computing irreducible vertex gamma_r from local BSE ...")
-    gamma_d, gamma_m = bse.gamma_w(dga_cfg)
-    dga_cfg.gamma_d = gamma_d
-    dga_cfg.gamma_m = gamma_m
+    if asymp=='bare-u':
+        if rank==0:
+            print("Computing irreducible vertex gamma_r from local BSE ...")
+        gamma_d, gamma_m = bse.gamma_w(dga_cfg)
+        dga_cfg.gamma_d = gamma_d
+        dga_cfg.gamma_m = gamma_m
 
     F_d_loc, F_m_loc = bse.F_r_loc(dga_cfg)
     dga_cfg.F_d_loc = F_d_loc
@@ -382,6 +383,61 @@ def main():
 
     comm.Barrier()
 
+
+    if do_eliashberg_ph:
+        if rank == 0:
+            print("Calculating pairing vertex ...")
+
+        # compute pairing vertex in singlet channel for all q
+        F_d_ph_q, F_m_ph_q = eliash.get_ph_vertex(dga_cfg, gamma_d, gamma_m, v_d_w_q, v_m_w_q, chi_d_w_q, chi_m_w_q, chi0_w_q)
+
+        nup = F_d_ph_q.shape[0]//2
+        F_d_ph_full = np.zeros([2*nup, 2*nup, n_qpoints], dtype=np.complex128)
+        F_d_ph_full[...,q_range] = F_d_ph_q
+        F_d_ph = np.zeros_like(F_d_ph_full) if rank==0 else None
+        comm.Reduce(F_d_ph_full, F_d_ph, op=MPI.SUM, root=0)
+
+        F_m_ph_full = np.zeros([2*nup, 2*nup, n_qpoints], dtype=np.complex128)
+        F_m_ph_full[...,q_range] = F_m_ph_q
+        F_m_ph = np.zeros_like(F_m_ph_full) if rank==0 else None
+        comm.Reduce(F_m_ph_full, F_m_ph, op=MPI.SUM, root=0)
+
+        if rank==0:
+            print(f"Computing leading pairing eigenvalues ... ")
+
+            F_d_ph_fullbz = util.irr2fullBZ_nu(dga_cfg, F_d_ph)
+            F_m_ph_fullbz = util.irr2fullBZ_nu(dga_cfg, F_m_ph)
+
+            F_d_ph_loc, F_m_ph_loc = eliash.get_F_ph_loc(dga_cfg)
+
+            #g_nuk = np.broadcast_to(g[:, None], (2*niwf, nk**kdim)).copy()
+            #g_nuk[niwf-ntail:niwf+ntail,:] = G_nu_k
+            #gamma_full = np.ones((2*nouter, 2*nouter, nk**kdim), dtype=np.complex128)*2*u
+            #gamma_full[nouter-nup:nouter+nup, nouter-nup:nouter+nup, :] = gamma
+            F_d_ph_loc_q = np.broadcast_to(F_d_ph_loc[:, :, None], (2*nup, 2*nup, n_qpoints_fullbz)).copy()
+            F_m_ph_loc_q = np.broadcast_to(F_m_ph_loc[:, :, None], (2*nup, 2*nup, n_qpoints_fullbz)).copy()
+            gamma_d_loc_q = np.broadcast_to(gamma_d[n4iwf-nup:n4iwf+nup, n4iwf-nup:n4iwf+nup, n4iwb, None], (2*nup, 2*nup, n_qpoints_fullbz)).copy()
+            gamma_m_loc_q = np.broadcast_to(gamma_m[n4iwf-nup:n4iwf+nup, n4iwf-nup:n4iwf+nup, n4iwb, None], (2*nup, 2*nup, n_qpoints_fullbz)).copy()
+            gamma_d_full = -0.5*(F_d_ph_fullbz - F_d_ph_loc_q) - 1.5*(F_m_ph_fullbz - F_m_ph_loc_q) + gamma_d_loc_q
+            gamma_m_full = -0.5*(F_d_ph_fullbz - F_d_ph_loc_q) + 0.5*(F_m_ph_fullbz - F_m_ph_loc_q) + gamma_d_loc_q
+            qpoints, idxs = util.gamma_x_m_qpoints(n_qpoints_fullbz, 4)
+            lams_d_q = []
+            gaps_d_q = []
+            lams_m_q = []
+            gaps_m_q = []
+            for iq,q in enumerate(qpoints):
+                print(f"Solving eliashberg equ. for {iq+1} / {len(qpoints)}")
+                lams_d, gaps_d = eliash.get_eig_ph(dga_cfg, gamma_d_full, G_nu_k, q)
+                lams_m, gaps_m = eliash.get_eig_ph(dga_cfg, gamma_m_full, G_nu_k, q)
+                lams_d_q.append(lams_d)
+                gaps_d_q.append(gaps_d)
+                lams_m_q.append(lams_m)
+                gaps_m_q.append(gaps_m)
+            
+            print(f"Eliashberg done!")
+
+    comm.Barrier()
+
     if rank == 0:
         print("Time of iteration 0 :", perf_counter() - t0, "seconds")
 
@@ -425,6 +481,17 @@ def main():
             group.create_dataset('F_d_pp_loc',data=F_d_pp_loc)
             group.create_dataset('F_m_pp_loc',data=F_m_pp_loc)
             group.create_dataset('gamma_pp_loc',data=gamma_pp)
+        if do_eliashberg_ph:
+            group.create_dataset('lam_d_q',data=lams_d_q)
+            group.create_dataset('lam_m_q',data=lams_m_q)
+            group.create_dataset('gap_d_q',data=gaps_d_q)
+            group.create_dataset('gap_m_q',data=gaps_m_q)
+            group.create_dataset('gamma_d',data=gamma_d)
+            group.create_dataset('gamma_m',data=gamma_m)
+            group.create_dataset('F_d_ph',data=F_d_ph_fullbz)
+            group.create_dataset('F_m_ph',data=F_m_ph_fullbz)
+            group.create_dataset('F_d_ph_loc',data=F_d_ph_loc)
+            group.create_dataset('F_m_ph_loc',data=F_m_ph_loc)
         fsave.flush()
 
     if max_iter>1:    

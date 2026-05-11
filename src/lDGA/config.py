@@ -50,6 +50,7 @@ dga_config_spec = [
     ('asymp', nb.types.string),
     ('nouter', nb.int64),
     ('do_eliashberg', nb.boolean),
+    ('do_eliashberg_ph', nb.boolean),
     ('pairing_mode', nb.types.string),
     # --- Handling np.ndarray ---
     # For a NumPy array, you need to specify:
@@ -109,7 +110,7 @@ class DGA_Config:
                 max_iter: int = 1, do_sde: bool = True, eps_se: float = 1e-3, mix_dmft: bool = False,
                 mixing_type: str = "linear", mixing: float = 0.5, beta_diis: float = 1.0, reg: float = 1e-8, mixing_window: int = 2,
                 lambda_decay: int = 1, lambda_type: str = "Pauli",
-                do_eliashberg: bool = False, pairing_mode: str = 'sd', 
+                do_eliashberg: bool = False, do_eliashberg_ph: bool = False, pairing_mode: str = 'sd', 
                 use_mpi: bool = True,
                 do_epc: bool = False, nseg: int = 10,
                 beta: float = 1000.0, g0: float = 0.0, w0: float = 1.0, U: float = 0.0,
@@ -150,6 +151,7 @@ class DGA_Config:
         self.do_epc = do_epc
         self.nseg = nseg
         self.do_eliashberg = do_eliashberg
+        self.do_eliashberg_ph = do_eliashberg_ph
         self.pairing_mode = pairing_mode
         # Physical parameters
         self.beta = beta

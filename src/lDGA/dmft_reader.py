@@ -58,6 +58,7 @@ def read_dmft_config(toml_dgafile_path:str) -> DGA_Config:
 
     # eliashberg params
     do_eliashberg = get_config_value(toml_config, "eliashberg.do_eliashberg", default=False)
+    do_eliashberg_ph = get_config_value(toml_config, "eliashberg.do_eliashberg_ph", default=False)
     pairing_mode = get_config_value(toml_config, "eliashberg.pairing_mode", default='sd')
     pairing_modes = ['s', 'd', 'sd']
     if pairing_mode not in pairing_modes:
@@ -178,15 +179,15 @@ def read_dmft_config(toml_dgafile_path:str) -> DGA_Config:
                     s_imp_data = siw.astype(np.complex128)
                     niwf = g_imp_data.shape[0]//2
 
-                    chi_loc_w = f['data/chi_loc_w'][()]
-                    chi_loc_w_data = chi_loc_w.astype(np.complex128)
-                    n2iwb = chi_loc_w_data.shape[-1]//2
+                    #chi_loc_w = f['data/chi_loc_w'][()]
+                    #chi_loc_w_data = chi_loc_w.astype(np.complex128)
+                    #n2iwb = chi_loc_w_data.shape[-1]//2
                     
-                    g3iw = f['data/g3iw'][()]
-                    n3iwf = g3iw.shape[-2]//2
-                    n3iwb = g3iw.shape[-1]//2
-                    p3ph = g3iw_conn(g3iw, giw, occ_imp, beta)
-                    p3ph_data = p3ph.astype(np.complex128)
+                    #g3iw = f['data/g3iw'][()]
+                    #n3iwf = g3iw.shape[-2]//2
+                    #n3iwb = g3iw.shape[-1]//2
+                    #p3ph = g3iw_conn(g3iw, giw, occ_imp, beta)
+                    #p3ph_data = p3ph.astype(np.complex128)
                     
                     g4iw = f['data/g4iw'][()]
                     n4iwf = g4iw.shape[-2]//2
@@ -253,6 +254,7 @@ def read_dmft_config(toml_dgafile_path:str) -> DGA_Config:
         asymp = asymp,
         nouter = nouter,
         do_eliashberg = do_eliashberg,
+        do_eliashberg_ph = do_eliashberg_ph,
         pairing_mode = pairing_mode
     )
 

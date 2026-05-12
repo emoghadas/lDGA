@@ -228,8 +228,8 @@ def get_ph_vertex(dga_cfg:DGA_ConfigType, gamma_irr_d:np.ndarray, gamma_irr_m:np
                 gamma_nu2_m = gamma_m[nu2_idx,w_idx,q_idx]
                 #f_pp = 0.5*(F_d_loc - F_m_loc)[nu1_idx,nu2_idx,w_idx] # local double counting, only relevant for s-wave
 
-                f_d = 1.0*(inu1==inu2)*beta/chi0_nu1 - phi_slice_d/(chi0_nu1*chi0_nu2) + u_d[w_idx] * (1-u_d[w_idx]*(chi_d[w_idx,q_idx])) * gamma_nu1_d * gamma_nu2_d
-                f_m = 1.0*(inu1==inu2)*beta/chi0_nu1 - phi_slice_m/(chi0_nu1*chi0_nu2) + u_m * (1-u_m*(chi_m[w_idx,q_idx])) * gamma_nu1_m * gamma_nu2_m
+                f_d = beta/chi0_nu1 - phi_slice_d/(chi0_nu1*chi0_nu2) + u_d[w_idx] * (1-u_d[w_idx]*(chi_d[w_idx,q_idx])) * gamma_nu1_d * gamma_nu2_d
+                f_m = beta/chi0_nu1 - phi_slice_m/(chi0_nu1*chi0_nu2) + u_m * (1-u_m*(chi_m[w_idx,q_idx])) * gamma_nu1_m * gamma_nu2_m
 
                 #gamma_s[i,j,q_idx] = 0.5*f_d - 1.5*f_m #- 2*f_pp - gamma_pp[i,j]
                 #gamma_t[i,j,q_idx] = 0.5*f_d + 0.5*f_m
@@ -370,6 +370,7 @@ def get_eig_ph(dga_cfg, gamma, g, q):
     gkq = np.roll(gkq, shift=nk//2, axis=(-1,-2))
 
     gamma_s = np.roll(gamma.reshape(2*nup, 2*nup, nk, nk), shift=nk//2, axis=(-1,-2))
+    gamma_s = np.roll(np.flip(gamma_s,axis=(-1,-2)), shift=1, axis=(-1,-2))
 
     gammax  = np.fft.fftn(gamma_s, axes=(-1, -2))
 
@@ -388,7 +389,7 @@ def get_eig_ph(dga_cfg, gamma, g, q):
 
     #v = get_gap_start(nup, nk, ktype='d').real 
     
-    lam, gap = eigsh(A, k=5, which='LA', ncv=100, tol=1e-10, maxiter=100000)
+    lam, gap = eigs(A, k=5, which='LR', ncv=100, tol=1e-10, maxiter=100000)
     idx = np.abs(lam-1).argsort()   
     lam = lam[idx]
     gap = gap[:,idx]

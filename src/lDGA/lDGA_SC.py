@@ -419,7 +419,7 @@ def main():
             gamma_d_loc_q = np.broadcast_to(gamma_d[n4iwf-nup:n4iwf+nup, n4iwf-nup:n4iwf+nup, n4iwb, None], (2*nup, 2*nup, n_qpoints_fullbz)).copy()
             gamma_m_loc_q = np.broadcast_to(gamma_m[n4iwf-nup:n4iwf+nup, n4iwf-nup:n4iwf+nup, n4iwb, None], (2*nup, 2*nup, n_qpoints_fullbz)).copy()
             gamma_d_full = -0.5*(F_d_ph_fullbz - F_d_ph_loc_q) - 1.5*(F_m_ph_fullbz - F_m_ph_loc_q) + gamma_d_loc_q
-            gamma_m_full = -0.5*(F_d_ph_fullbz - F_d_ph_loc_q) + 0.5*(F_m_ph_fullbz - F_m_ph_loc_q) + gamma_d_loc_q
+            gamma_m_full = -0.5*(F_d_ph_fullbz - F_d_ph_loc_q) + 0.5*(F_m_ph_fullbz - F_m_ph_loc_q) + gamma_m_loc_q
             qpoints, idxs = util.gamma_x_m_qpoints(n_qpoints_fullbz, 4)
             lams_d_q = []
             gaps_d_q = []

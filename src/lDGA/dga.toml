@@ -34,4 +34,6 @@
 
 [eliashberg]
 	do_eliashberg = false
+	do_eliashberg_ph = false
+	poor_parquet = false
 	pairing_mode = 'sd' # ['s', 'd', 'sd']

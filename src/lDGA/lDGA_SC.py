@@ -90,6 +90,7 @@ def main():
     nseg = dga_cfg.nseg
     do_eliashberg = dga_cfg.do_eliashberg
     do_eliashberg_ph = dga_cfg.do_eliashberg_ph
+    poor_parquet = dga_cfg.poor_parquet
     pairing_mode = dga_cfg.pairing_mode
 
 
@@ -213,12 +214,10 @@ def main():
     # lattice bubble for each processes' q-points and then gather for all q
     chi0_w_q = bse.chi0_w_q(dga_cfg, mu, s_dga=s_nuk_loc)
 
-    chi0_q_full = np.zeros([2*n4iwf, 2*n4iwb+1, n_qpoints], dtype=np.complex128)
-    chi0_q_full[:,:,q_range] = chi0_w_q
-
-    chi0_latt = np.zeros_like(chi0_q_full) if rank==0 else None
-
-    comm.Reduce(chi0_q_full, chi0_latt, op=MPI.SUM, root=0)
+    #chi0_q_full = np.zeros([2*n4iwf, 2*n4iwb+1, n_qpoints], dtype=np.complex128)
+    #chi0_q_full[:,:,q_range] = chi0_w_q
+    #chi0_latt = np.zeros_like(chi0_q_full) if rank==0 else None
+    #comm.Reduce(chi0_q_full, chi0_latt, op=MPI.SUM, root=0)
 
     if rank==0:
         print("Calculate lattice susceptibility and hedin vertex ...")
@@ -438,6 +437,66 @@ def main():
 
     comm.Barrier()
 
+
+    if poor_parquet:
+        if rank == 0:
+            print("Calculating full ladder vertex F ...")
+
+        # compute pairing vertex in singlet channel for all q
+        F_d_ph_q, F_m_ph_q = eliash.get_full_vertex(dga_cfg, gamma_d, gamma_m, v_d_w_q, v_m_w_q, chi_d_w_q, chi_m_w_q, chi0_w_q)
+        F_d_ph_k, F_m_ph_k = eliash.get_ph_vertex(dga_cfg, gamma_d, gamma_m, v_d_w_q, v_m_w_q, chi_d_w_q, chi_m_w_q, chi0_w_q)
+
+        nup = F_d_ph_k.shape[0]//2
+        F_d_ph_full = np.zeros([2*nup, 2*nup, n_qpoints], dtype=np.complex128)
+        F_d_ph_full[...,q_range] = F_d_ph_k
+        F_d_ph = np.zeros_like(F_d_ph_full) if rank==0 else None
+        comm.Reduce(F_d_ph_full, F_d_ph, op=MPI.SUM, root=0)
+
+        F_m_ph_full = np.zeros([2*nup, 2*nup, n_qpoints], dtype=np.complex128)
+        F_m_ph_full[...,q_range] = F_m_ph_k
+        F_m_ph = np.zeros_like(F_m_ph_full) if rank==0 else None
+        comm.Reduce(F_m_ph_full, F_m_ph, op=MPI.SUM, root=0)
+
+        F_d_q_full = np.zeros([2*nup, 2*nup, n_qpoints], dtype=np.complex128)
+        F_d_q_full[...,q_range] = F_d_ph_q
+        F_d_q = np.zeros_like(F_d_q_full) if rank==0 else None
+        comm.Reduce(F_d_q_full, F_d_q, op=MPI.SUM, root=0)
+
+        F_m_q_full = np.zeros([2*nup, 2*nup, n_qpoints], dtype=np.complex128)
+        F_m_q_full[...,q_range] = F_m_ph_q
+        F_m_q = np.zeros_like(F_m_q_full) if rank==0 else None
+        comm.Reduce(F_m_q_full, F_m_q, op=MPI.SUM, root=0)
+
+        if rank==0:
+            print(f"Computing poor man's parquet susceptibilities ... ")
+
+            F_d_q_fullbz = util.irr2fullBZ_nu(dga_cfg, F_d_q)
+            F_m_q_fullbz = util.irr2fullBZ_nu(dga_cfg, F_m_q)
+            F_d_ph_fullbz = util.irr2fullBZ_nu(dga_cfg, F_d_ph)
+            F_m_ph_fullbz = util.irr2fullBZ_nu(dga_cfg, F_m_ph)
+
+            F_d_ph_loc_q = np.broadcast_to(F_d_loc[n4iwf-nup:n4iwf+nup, n4iwf-nup:n4iwf+nup, n4iwb, None], (2*nup, 2*nup, n_qpoints_fullbz)).copy()
+            F_m_ph_loc_q = np.broadcast_to(F_m_loc[n4iwf-nup:n4iwf+nup, n4iwf-nup:n4iwf+nup, n4iwb, None], (2*nup, 2*nup, n_qpoints_fullbz)).copy()
+            gamma_d_full = -F_d_ph_loc_q -0.5*F_d_ph_fullbz - 1.5*F_m_ph_fullbz
+            gamma_m_full = -F_m_ph_loc_q -0.5*F_d_ph_fullbz + 0.5*F_m_ph_fullbz
+            qpoints, idxs = util.gamma_x_m_qpoints(n_qpoints_fullbz, 4)
+            chi_nl_d_q = []
+            chi_nl_m_q = []
+            for iq,q in enumerate(qpoints):
+                print(f"Solving eliashberg equ. for {iq+1} / {len(qpoints)}")
+                iq = util.k2ik(q, dga_cfg.nk)
+                F_nl_d = np.broadcast_to(F_d_q_fullbz[:,:,iq, None], (2*nup, 2*nup, n_qpoints_fullbz)).copy() + gamma_d_full
+                F_nl_m = np.broadcast_to(F_m_q_fullbz[:,:,iq, None], (2*nup, 2*nup, n_qpoints_fullbz)).copy() + gamma_m_full
+                chi_nl_d = eliash.parquet_bse(dga_cfg, F_nl_d, G_nu_k, q)
+                chi_nl_m = eliash.parquet_bse(dga_cfg, F_nl_m, G_nu_k, q)
+                chi_nl_d_q.append(chi_nl_d)
+                chi_nl_m_q.append(chi_nl_m)
+            
+            print(f"Poor man's Parquet BSE done!")
+
+    comm.Barrier()
+
+
     if rank == 0:
         print("Time of iteration 0 :", perf_counter() - t0, "seconds")
 
@@ -452,6 +511,7 @@ def main():
         group.create_dataset('u',data=u)
         group.create_dataset('w0',data=w0)
         group.create_dataset('g0',data=g0)
+        group.create_dataset('poor_parquet',data=poor_parquet)
         group = fsave.create_group('iter_0')
         group.create_dataset('sigma_dmft',data=s)
         group.create_dataset('sigma_sde_loc',data=sigma_sde_loc)
@@ -460,7 +520,7 @@ def main():
             group.create_dataset('G_nu_k',data=G_nu_k)
             group.create_dataset('mu',data=new_mu)
         group.create_dataset('chi0_loc',data=dga_cfg.chi0_w)
-        group.create_dataset('chi0_latt',data=chi0_latt)    
+        #group.create_dataset('chi0_latt',data=chi0_latt)    
         group.create_dataset('lambda_d',data=lambda_d)
         group.create_dataset('lambda_m',data=lambda_m)
         group.create_dataset('chi_d_latt',data=chi_d_latt)
@@ -492,6 +552,16 @@ def main():
             group.create_dataset('F_m_ph',data=F_m_ph_fullbz)
             group.create_dataset('F_d_ph_loc',data=F_d_ph_loc)
             group.create_dataset('F_m_ph_loc',data=F_m_ph_loc)
+        if poor_parquet:
+            group.create_dataset('q_poor_parquet',data=qpoints)
+            group.create_dataset('chi_nl_d_q',data=chi_nl_d_q)
+            group.create_dataset('chi_nl_m_q',data=chi_nl_m_q)
+            group.create_dataset('F_d_q',data=F_d_q_fullbz)
+            group.create_dataset('F_m_q',data=F_m_q_fullbz)
+            group.create_dataset('F_d_trans',data=F_d_ph_fullbz)
+            group.create_dataset('F_m_trans',data=F_m_ph_fullbz)
+            group.create_dataset('F_d_ph_loc',data=F_d_loc)
+            group.create_dataset('F_m_ph_loc',data=F_m_loc)
         fsave.flush()
 
     if max_iter>1:    

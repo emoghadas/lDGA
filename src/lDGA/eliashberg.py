@@ -239,6 +239,94 @@ def get_ph_vertex(dga_cfg:DGA_ConfigType, gamma_irr_d:np.ndarray, gamma_irr_m:np
     return F_d, F_m
 
 
+@jit(nopython=True)
+def get_full_vertex(dga_cfg:DGA_ConfigType, gamma_irr_d:np.ndarray, gamma_irr_m:np.ndarray, gamma_d:np.ndarray, gamma_m:np.ndarray, chi_d:np.ndarray, chi_m:np.ndarray, chi0_w_q:np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    '''
+    Compute ladder pairing vertex for singlet and triplet channels
+    '''
+    u=dga_cfg.U; beta=dga_cfg.beta; dens=dga_cfg.occ_imp
+    g0=dga_cfg.g0; omega0=dga_cfg.w0
+    ts=dga_cfg.ts
+    n4iwf=dga_cfg.n4iwf; n4iwb=dga_cfg.n4iwb
+    self_old=dga_cfg.s_imp
+    g_old=dga_cfg.g_imp
+    F_d_loc = dga_cfg.F_d_loc
+    F_m_loc = dga_cfg.F_m_loc
+    dim = dga_cfg.kdim
+    irrbz = dga_cfg.irrbz
+    all_q_sym = dga_cfg.all_q_sym
+    symq_weights = dga_cfg.symq_weights
+    qpoints = dga_cfg.q_grid_loc
+    Nk = dga_cfg.n_kpoints
+    Nqtot = dga_cfg.n_qpoints_fullbz
+    Nq = chi_d.shape[1]
+    asymp = dga_cfg.asymp
+    niwf = dga_cfg.nouter
+    gamma_pp = dga_cfg.gamma_pp
+
+    #chi_d -= asymp_chi(2*niwf, beta) # this is readded again at the end
+    #chi_m -= asymp_chi(2*niwf, beta)
+
+    nup = n4iwf//2
+
+    wmats  = build_w_mats(n4iwb,beta)
+
+    Uw = Udyn_arr(wmats,omega0,g0,u).astype(np.complex128)
+
+    u_d = 2*Uw - u
+    u_m = - u
+
+    F_d = np.empty((2*nup,2*nup,qpoints.shape[0]), dtype=np.complex128)
+    F_m = np.empty((2*nup,2*nup,qpoints.shape[0]), dtype=np.complex128)
+    for q_idx, q in enumerate(qpoints):
+        nu_range = slice(n4iwf-nup,n4iwf+nup)
+        w_idx = n4iwb
+
+        phi_d = np.linalg.inv(np.diag(1/chi0_w_q[:,w_idx,q_idx]) + (gamma_irr_d[:,:,w_idx]-u_d[w_idx]*np.ones((2*n4iwf,2*n4iwf), dtype=np.complex128))/beta**2)
+        phi_m = np.linalg.inv(np.diag(1/chi0_w_q[:,w_idx,q_idx]) + (gamma_irr_m[:,:,w_idx]-u_m*np.ones((2*n4iwf,2*n4iwf), dtype=np.complex128))/beta**2)
+
+        phi_slice_d = phi_d[nu_range, nu_range]
+        phi_slice_m = phi_m[nu_range, nu_range]
+
+        f_d = np.diag(beta**2/chi0_w_q[nu_range,w_idx,q_idx]) - np.diag(beta/chi0_w_q[nu_range,w_idx,q_idx])@phi_slice_d@np.diag(beta/chi0_w_q[nu_range,w_idx,q_idx]) + u_d[w_idx] * (1-u_d[w_idx]*chi_d[w_idx,q_idx])*np.outer(gamma_d[nu_range,w_idx,q_idx], gamma_d[nu_range,w_idx,q_idx])
+        f_m = np.diag(beta**2/chi0_w_q[nu_range,w_idx,q_idx]) - np.diag(beta/chi0_w_q[nu_range,w_idx,q_idx])@phi_slice_m@np.diag(beta/chi0_w_q[nu_range,w_idx,q_idx]) + u_m * (1-u_m*chi_m[w_idx,q_idx])*np.outer(gamma_m[nu_range,w_idx,q_idx], gamma_m[nu_range,w_idx,q_idx])
+
+        F_d[:,:,q_idx] = f_d
+        F_m[:,:,q_idx] = f_m
+    
+    return F_d, F_m
+
+
+def parquet_bse(dga_cfg, gamma, g, q):
+    ''' calculate leading eigenvalues for eliashberg kernel '''
+    nup = gamma.shape[0] // 2
+    niwf = g.shape[0] // 2
+    nk   = dga_cfg.nk
+    kdim = dga_cfg.kdim
+    beta = dga_cfg.beta
+
+    gk = g[niwf - nup : niwf + nup, ...].reshape(2*nup, nk, nk)
+    gkq = shift_gk_by_q(gk, q)
+    chi0_kq = -beta*gk*gkq
+
+    chi0_kq = np.roll(chi0_kq, shift=nk//2, axis=(-1,-2))
+    chi0_kq_x = np.fft.fftn(chi0_kq, axes=(-1,-2))
+
+    gamma_s = np.roll(gamma.reshape(2*nup, 2*nup, nk, nk), shift=nk//2, axis=(-1,-2))
+    gamma_s = np.roll(np.flip(gamma_s,axis=(-1,-2)), shift=1, axis=(-1,-2))
+
+    gammax  = np.fft.fftn(gamma_s, axes=(-1, -2))
+
+    norm = nk**kdim * beta
+
+    f1 = np.sum(gammax*chi0_kq_x[None,:,...], axis=1)
+    f1_k = np.fft.ifftn(f1, axes=(-1, -2))
+    f_vc = np.sum(chi0_kq*f1_k)/norm**2/beta**2
+    chi_nl = np.sum(chi0_kq)/norm/beta - f_vc
+
+    return chi_nl
+
+
 
 
 ############## power iteration routines ###############

@@ -59,6 +59,7 @@ def read_dmft_config(toml_dgafile_path:str) -> DGA_Config:
     # eliashberg params
     do_eliashberg = get_config_value(toml_config, "eliashberg.do_eliashberg", default=False)
     do_eliashberg_ph = get_config_value(toml_config, "eliashberg.do_eliashberg_ph", default=False)
+    poor_parquet = get_config_value(toml_config, "eliashberg.poor_parquet", default=False)
     pairing_mode = get_config_value(toml_config, "eliashberg.pairing_mode", default='sd')
     pairing_modes = ['s', 'd', 'sd']
     if pairing_mode not in pairing_modes:
@@ -255,6 +256,7 @@ def read_dmft_config(toml_dgafile_path:str) -> DGA_Config:
         nouter = nouter,
         do_eliashberg = do_eliashberg,
         do_eliashberg_ph = do_eliashberg_ph,
+        poor_parquet = poor_parquet,
         pairing_mode = pairing_mode
     )
 

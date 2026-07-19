@@ -36,6 +36,7 @@ def read_dmft_config(toml_dgafile_path:str) -> DGA_Config:
     nouter = get_config_value(toml_config, "dga.nouter", default=300)
     max_iter = get_config_value(toml_config, "dga.max_iter", default=1)
     do_sde = get_config_value(toml_config, "dga.do_sde", default=True)
+    fft = get_config_value(toml_config, "dga.FFT", default=False)
     if not do_sde and max_iter>1:
         raise ValueError("Cannot do SC-lDGA without SDE !")
 
@@ -242,6 +243,7 @@ def read_dmft_config(toml_dgafile_path:str) -> DGA_Config:
         kdim = kdim,
         max_iter = max_iter,
         do_sde = do_sde,
+        fft = fft,
         eps_se = eps_se,
         mix_dmft = mix_dmft,
         mixing_type = mixing_type,

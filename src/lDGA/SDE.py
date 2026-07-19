@@ -98,7 +98,18 @@ def Hubbard_Holstein_SDE(dga_cfg:DGA_ConfigType, gamma_d:np.ndarray, gamma_m:np.
 
     #Here also Fock term
     #N.B. now working only for a local self-energy, for SC-DGA to be corrected for a k-dependent one
-    if irrbz:
+    if dga_cfg.fft:
+        if irrbz:
+            fft_q_sym = all_q_sym
+            fft_q_weights = symq_weights
+        else:
+            fft_q_sym = qpoints[:, None, :]
+            fft_q_weights = np.ones(Nq, dtype=np.float64)
+        self_energy = self_sum_Uw_fft(
+            theta_nu_wq-2*udyn_arr.reshape(1,2*n4iwb+1,1),
+            beta, fft_q_sym, fft_q_weights, Nk, Nqtot, dim, G_nu_k
+        )
+    elif irrbz:
         #self_energy = self_sum_Uw_irr(self_old, g_old, theta_nu_wq, omega0, g0, udyn_arr, beta, qpoints, all_q_sym, symq_weights, Nk, Nqtot, dim, mu, mpi_rank, ts, self_dga)
         self_energy = self_sum_Uw_test(self_old, g_old, theta_nu_wq-2*udyn_arr.reshape(1,2*n4iwb+1,1), omega0, g0, udyn_arr, beta, qpoints, all_q_sym, symq_weights, Nk, Nqtot, dim, mu, mpi_rank, ts, G_nu_k, self_dga)
     else:
@@ -110,6 +121,84 @@ def Hubbard_Holstein_SDE(dga_cfg:DGA_ConfigType, gamma_d:np.ndarray, gamma_m:np.
         self_energy += (dens*( u - (4.0*g0**2/omega0) ) + g0**2/omega0)
 
     return self_energy # Swinger-Dyson for the Hubbard-Holstein model
+
+
+def _fft_plus_convolution(theta_q:np.ndarray, green_k:np.ndarray, dim:int) -> np.ndarray:
+    """Return sum_q theta(q) * green(k+q) for one or more leading batches."""
+    nk = int(round(theta_q.shape[-1] ** (1.0 / dim)))
+    grid_shape = theta_q.shape[:-1] + (nk,) * dim
+    momentum_axes = tuple(range(theta_q.ndim - 1, theta_q.ndim - 1 + dim))
+    theta_grid = theta_q.reshape(grid_shape)
+    green_grid = green_k.reshape(grid_shape)
+
+    # ik2k/k2ik store the periodic grid in [-pi, pi), so index zero denotes
+    # -pi rather than zero momentum. Shift q to zero-based cyclic indices
+    # before applying the convolution theorem.
+    theta_grid = np.roll(theta_grid, shift=-(nk//2), axis=momentum_axes)
+
+    # C(k)=sum_q T(q)G(k+q).  The complex conjugations reverse only the
+    # momentum argument; unlike a usual correlation, neither input itself is
+    # conjugated in the SDE.
+    theta_minus_q_fft = np.conj(np.fft.fftn(np.conj(theta_grid), axes=momentum_axes))
+    green_fft = np.fft.fftn(green_grid, axes=momentum_axes)
+    return np.fft.ifftn(theta_minus_q_fft * green_fft, axes=momentum_axes).reshape(theta_q.shape)
+
+
+def self_sum_Uw_fft(theta:np.ndarray, beta:np.float64, all_q_sym:np.ndarray,
+                    symq_weights:np.ndarray, Nk:int, Nqtot:int, dim:int,
+                    G_nu_k:np.ndarray, batch_size:int=8) -> np.ndarray:
+    """Momentum-FFT implementation of the irreducible-BZ SDE convolution.
+
+    Each MPI rank expands only its local irreducible q wedge.  Consequently
+    this routine returns the same partial q sum as ``self_sum_Uw_test`` and the
+    existing Reduce/Allreduce in the caller remains unchanged.  Expansion and
+    FFTs are done in small fermionic-frequency batches, so no (nu,w,q_full)
+    array is ever allocated.
+    """
+    nnu, nw, nqloc = theta.shape
+    ntail = G_nu_k.shape[0] // 2
+    n4iwf = nnu // 2
+    n4iwb = nw // 2
+    nk_lin = int(round(Nk ** (1.0 / dim)))
+    if nk_lin**dim != Nk or Nk != Nqtot:
+        raise ValueError("FFT SDE requires identical regular full-BZ k and q grids")
+    if nk_lin % 2:
+        raise ValueError("FFT SDE requires an even linear momentum-grid size")
+    if all_q_sym.shape[0] != nqloc:
+        raise ValueError("Symmetry-expanded q grid is inconsistent with theta")
+
+    # Map the local irreducible wedge and all its (possibly repeated) symmetry
+    # images to the flattened full BZ once. Repetitions are intentional: the
+    # direct path visits all symmetry images and symq_weights compensates them.
+    q_indices = np.empty((all_q_sym.shape[1], nqloc), dtype=np.int64)
+    for isym in range(all_q_sym.shape[1]):
+        for iq in range(nqloc):
+            q_indices[isym, iq] = k2ik(all_q_sym[iq, isym], nk_lin)
+
+    self_en = np.zeros((nnu, Nk), dtype=np.complex128)
+    batch_size = max(1, min(int(batch_size), nnu))
+    prefactor = 0.5 / (beta * Nqtot)
+
+    for iw_idx, iw in enumerate(range(-n4iwb, n4iwb + 1)):
+        for start in range(0, nnu, batch_size):
+            stop = min(start + batch_size, nnu)
+            theta_full = np.zeros((stop - start, Nk), dtype=np.complex128)
+            weighted_theta = theta[start:stop, iw_idx, :] * symq_weights[None, :]
+            for isym in range(q_indices.shape[0]):
+                # A fixed symmetry operation maps distinct irreducible points
+                # one-to-one. Coincident images occur between operations and
+                # are therefore accumulated by these successive additions.
+                theta_full[:, q_indices[isym]] += weighted_theta
+
+            green = G_nu_k[
+                ntail - n4iwf + iw + start:
+                ntail - n4iwf + iw + stop, :
+            ]
+            self_en[start:stop] += prefactor * _fft_plus_convolution(
+                theta_full, green, dim
+            )
+
+    return self_en
 
 #internal auxiliary routine
 @jit(nopython=True)

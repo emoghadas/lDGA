@@ -5,6 +5,7 @@
 	nouter = 500
 	lambda_type = "Pauli"
 	max_iter = 1
+	FFT = false # use momentum-space FFT convolution in the SDE
 	
 # only in the case of max_iter > 1
 [selfcons] 	              
